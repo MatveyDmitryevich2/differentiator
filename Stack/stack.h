@@ -8,13 +8,7 @@
 #include <assert.h>
 #include <stdint.h>
 
-struct Info_about_unit_of_path
-{
-    char* Adress;
-    bool True_or_False;
-};
-
-typedef Info_about_unit_of_path StackElem_t;
+typedef char* StackElem_t;
 static const int SHAG_V_REALOC = 2;
 static const int OBRATNIY_SHAG_V_REALOC = 4;
 static const uint64_t KONOREYKA = 29304148;

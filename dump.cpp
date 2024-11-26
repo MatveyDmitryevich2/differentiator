@@ -5,12 +5,9 @@
 #include <time.h>
 #include <string.h>
 #include <sys/time.h>
-#include <iostream>//FIXME использвоать пул аллокатор
-#include <unistd.h>//FIXME сохранение
-                    //FIXME деференцирование
-                    //FIXME тех
-                    //FIXME тейлор
-                    //FIXME #include "Pool_allocator/pool.allocator.h"
+#include <iostream>
+#include <unistd.h>
+
 static void Write_before_body();
 static void Write_body();
 static void Write_html();
@@ -65,19 +62,47 @@ static void Generate_nodes(Node* node, FILE* file)
     char node_id[100];
     snprintf(node_id, sizeof(node_id), "node_%d", node_count++);
 
+    const char* node_color = "white";
+    
+    if (node->elem.type == VARIABLE)
+    {
+        node_color = "blue";
+    }
+    else if (node->elem.type == NUMBER)
+    {
+        node_color = "green";
+    }
+    else if (node->elem.type == OPERATION)
+    {
+        node_color = "red";
+    }
+
     fprintf(file, "%s [\n", node_id);
     fprintf(file, "shape=plaintext,\n");
     fprintf(file, "label=<\n");
-    fprintf(file, "<table border=\"0\" cellpadding=\"4\" cellborder=\"1\" width=\"300\">\n");
+    fprintf(file, "<table border=\"0\" cellpadding=\"4\" cellborder=\"1\" width=\"300\" bgcolor=\"%s\">\n", node_color);
     fprintf(file, "<tr><td align=\"center\" colspan=\"2\">Parent: %p</td></tr>\n", (void*)node->parent);
-    fprintf(file, "<tr><td align=\"center\" colspan=\"2\">type: %d</td></tr>\n", node->elem.type);
-    if (node->elem.type == OPERATION) { fprintf(file, "<tr><td align=\"center\" colspan=\"2\">%s</td></tr>\n", Enum_op_to_str(node->elem.argument.operation)); }
-    if (node->elem.type == NUMBER) { fprintf(file, "<tr><td align=\"center\" colspan=\"2\">%.2lf</td></tr>\n", node->elem.argument.number); }
-    if (node->elem.type == VARIABLE) { fprintf(file, "<tr><td align=\"center\" colspan=\"2\">%c</td></tr>\n", node->elem.argument.variable); }
+
+    if (node->elem.type == OPERATION) {
+        fprintf(file, "<tr><td align=\"center\" colspan=\"2\">%s</td></tr>\n", _OPERATION);
+        fprintf(file, "<tr><td align=\"center\" colspan=\"2\">%s</td></tr>\n", Enum_op_to_str(node->elem.argument.operation));
+    }
+
+    if (node->elem.type == NUMBER) {
+        fprintf(file, "<tr><td align=\"center\" colspan=\"2\">%s</td></tr>\n", _NUMBER);
+        fprintf(file, "<tr><td align=\"center\" colspan=\"2\">%.2lf</td></tr>\n", node->elem.argument.number);
+    }
+    
+    if (node->elem.type == VARIABLE) {
+        fprintf(file, "<tr><td align=\"center\" colspan=\"2\">%s</td></tr>\n", _VARIABLE);
+        fprintf(file, "<tr><td align=\"center\" colspan=\"2\">%c</td></tr>\n", node->elem.argument.variable);
+    }
+
     fprintf(file, "<tr>\n");
     fprintf(file, "<td align=\"center\" width=\"150\">Left: %p</td>\n", (void*)node->left);
     fprintf(file, "<td align=\"center\" width=\"150\">Right: %p</td>\n", (void*)node->right);
     fprintf(file, "</tr>\n");
+
     fprintf(file, "</table>\n");
     fprintf(file, ">\n");
     fprintf(file, "];\n");
@@ -88,7 +113,7 @@ static void Generate_nodes(Node* node, FILE* file)
         {
             char left_id[100];
             snprintf(left_id, sizeof(left_id), "node_%d", node_count);
-            fprintf(file, "    %s -> %s [color=\"#A600A6\"];\n", node_id, left_id);
+            fprintf(file, "    %s -> %s [color=\"#000000\"];\n", node_id, left_id);
             Generate_nodes(node->left, file);
         }
 
@@ -96,7 +121,7 @@ static void Generate_nodes(Node* node, FILE* file)
         {
             char right_id[100];
             snprintf(right_id, sizeof(right_id), "node_%d", node_count);
-            fprintf(file, "    %s -> %s [color=\"#A600A6\"];\n", node_id, right_id);
+            fprintf(file, "    %s -> %s [color=\"#000000\"];\n", node_id, right_id);
             Generate_nodes(node->right, file);
         }
     }
@@ -114,6 +139,19 @@ const char* Enum_op_to_str(Operation operation)
         CASE(POWER);
         CASE(SIN);
         CASE(COS);
+        CASE(TG);
+        CASE(CTG);
+        CASE(SH);
+        CASE(CH);
+        CASE(TH);
+        CASE(CTH);
+        CASE(ARCSIN);
+        CASE(ARCCOS);
+        CASE(ARCTG);
+        CASE(ARCCTG);
+        CASE(LOG);
+        CASE(LN);
+        CASE(EXP);
         CASE(NO_OPERATION);
         default: { return NULL; };
     }
