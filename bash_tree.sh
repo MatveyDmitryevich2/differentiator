@@ -1,6 +1,6 @@
 #!/bin/bash
 
-g++ main.cpp tree.cpp dump.cpp Pool_allocator/page_allocator.cpp Pool_allocator/pool_allocator.cpp -o differentiator.exe -D_DEBUG \
+g++ main.cpp tree.cpp dump.cpp utils.cpp dif_function.cpp Pool_allocator/page_allocator.cpp Pool_allocator/pool_allocator.cpp -o differentiator.exe -D_DEBUG \
 -ggdb3 -std=c++17 -O0 -Wall -Wextra -Weffc++ -Waggressive-loop-optimizations \
 -Wc++14-compat -Wmissing-declarations -Wcast-align -Wcast-qual -Wchar-subscripts \
 -Wconditionally-supported -Wconversion -Wctor-dtor-privacy -Wempty-body -Wfloat-equal \

@@ -4,75 +4,90 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-static const size_t MAX_SIZE_LINE = 500;
-static const int SIZE_ANSWER = 13;
-static const char NAME_FILE_STOR[] = "tree_old.txt"; 
+#include "Pool_allocator/pool_allocator.h"
+
+#ifdef USE_DEBUG_PRINTF
+    #define DPRINTF(str, ...) fprintf(stderr, str, __VA_ARGS__)
+#else
+    #define DPRINTF(str, ...) ;
+#endif
+
+enum Error
+{
+    Error_NO_ERROR                = 0,
+    Error_OPEN_FILE               = 1,
+    Error_CLOSE_FILE              = 2,
+    Error_MEMORY_ALLOCATION_ERROR = 3,
+    Error_READING_THE_FILE        = 4,
+};
+
+static const size_t MAX_SIZE_LINE  = 500;
+static const int SIZE_ANSWER       = 13;
+static const char NAME_FILE_STOR[] = "tree_old.txt";
 static const char NAME_FILE_DTOR[] = "tree_new.txt"; 
+const char NAME_FILE_LATEX[]       = "dump_LaTex.tex";
 
 enum Types
 {
-    VARIABLE  = 1,
-    NUMBER    = 2,
-    OPERATION = 3,
+    Types_VARIABLE  = 1,
+    Types_NUMBER    = 2,
+    Types_OPERATION = 3,
 };
 
 enum Operation
 {
-    NO_OPERATION = 0,
-    ADD          = 1,
-    SUB          = 2,
-    MUL          = 3,
-    DIV          = 4,
-    POWER        = 5,
-    SIN          = 6,
-    COS          = 7,
-    TG           = 8,
-    CTG          = 9,
-    SH           = 10,
-    CH           = 11,
-    TH           = 12,
-    CTH          = 13,
-    ARCSIN       = 14,
-    ARCCOS      = 15,
-    ARCTG       = 16,
-    ARCCTG      = 17,
-    LOG          = 18,
-    LN           = 19,
-    EXP          = 20,
+    Operation_NO_OPERATION = 0,
+    Operation_ADD          = 1,
+    Operation_SUB          = 2,
+    Operation_MUL          = 3,
+    Operation_DIV          = 4,
+    Operation_POWER        = 5,
+    Operation_SIN          = 6,
+    Operation_COS          = 7,
+    Operation_TG           = 8,
+    Operation_CTG          = 9,
+    Operation_SH           = 10,
+    Operation_CH           = 11,
+    Operation_TH           = 12,
+    Operation_CTH          = 13,
+    Operation_ARCSIN       = 14,
+    Operation_ARCCOS       = 15,
+    Operation_ARCTG        = 16,
+    Operation_ARCCTG       = 17,
+    Operation_LOG          = 18,
+    Operation_LN           = 19,
+    Operation_EXP          = 20,
 };
 
-static const char _VARIABLE  [] = "variable";
-static const char _NUMBER    [] = "number";
-static const char _OPERATION [] = "operation";
+static const char Types_VARIABLE_  [] = "variable";
+static const char Types_NUMBER_    [] = "number";
+static const char Types_OPERATION_ [] = "operation";
 
 static const char LEFT_BRACKET = '(';
 static const char RIGHT_BRACKET = ')';
 
-static const char _ADD          [] = "+";
-static const char _SUB          [] = "-";
-static const char _MUL          [] = "*";
-static const char _DIV          [] = "/";
-static const char _POWER        [] = "^";
+static const char ADD_          [] = "+";
+static const char SUB_          [] = "-";
+static const char MUL_          [] = "*";
+static const char DIV_          [] = "/";
+static const char POWER_        [] = "^";
+static const char SIN_          [] = "sin";
+static const char COS_          [] = "cos";
+static const char TG_           [] = "tg";
+static const char CTG_          [] = "ctg";
+static const char SH_           [] = "sh";
+static const char CH_           [] = "ch";
+static const char TH_           [] = "th";
+static const char CTH_          [] = "cth";
+static const char ARCSIN_       [] = "arcsin";
+static const char ARCCOS_       [] = "arccos";
+static const char ARCTG_        [] = "arctg";
+static const char ARCCTG_       [] = "arcctg";
+static const char LOG_          [] = "log";
+static const char LN_           [] = "ln";
+static const char EXP_          [] = "exp";
 
-static const char _SIN          [] = "sin";
-static const char _COS          [] = "cos";
-static const char _TG           [] = "tg";
-static const char _CTG          [] = "ctg";
-static const char _SH           [] = "sh";
-static const char _CH           [] = "ch";
-static const char _TH           [] = "th";
-static const char _CTH          [] = "cth";
-
-static const char _ARCSIN       [] = "arcsin";
-static const char _ARCCOS       [] = "arccos";
-static const char _ARCTG        [] = "arctg";
-static const char _ARCCTG       [] = "arcctg";
-
-static const char _LOG          [] = "log";
-static const char _LN           [] = "ln";
-static const char _EXP          [] = "exp";
-
-static const char _NO_OPERATION [] = "noop";
+static const char NO_Types_OPERATION_ [] = "noop";
 
 struct Element
 {
@@ -95,45 +110,17 @@ struct Node
     Node* parent;
 };
 
-Node* Decod_tree(const char* name_file);
+#include "dif_function.h"
+
+Node* Decod_tree(const char* name_file, Pool_allocator* pool_allocator, Error* err);
 void Tree_dtor(Node* node);
-void Save_tree(Node* node, const char* name_file);
+Error Save_tree(Node* node, const char* name_file);
+void Error_handling(Error err);
 
-void Calculation(Node* node);
-void Simplification(Node* node);
-
-Node* Сopy_branch(Node* node, Node* new_node, Node* parent);
-
-Node* Dif(Node* node);
-Node* Add_dif(Node* node);
-Node* Sub_dif(Node* node);
-Node* Mul_dif(Node* node);
-Node* Div_dif(Node* node);
-Node* Cos_dif(Node* node);
-Node* Sin_dif(Node* node);
-Node* Ln_dif(Node* node);
-Node* Log_dif(Node* node);
-Node* Power_dif(Node* node);
-Node* Exp_dif(Node* node);
-Node* Tg_dif(Node* node);
-Node* Ctg_dif(Node* node);
-Node* Sh_dif(Node* node);
-Node* Ch_dif(Node* node);
-Node* Th_dif(Node* node);
-Node* Cth_dif(Node* node);
-Node* Arcsin_dif(Node* node);
-Node* Arccos_dif(Node* node);
-Node* Arctg_dif(Node* node);
-Node* Arcctg_dif(Node* node);
+Node* Сopy_branch(Node* node, Node* new_node, Node* parent, Pool_allocator* pool_allocator);
 
 //----------------------------------------------------simplification----------------------------------------------------
 
 const size_t MAX_TREE_DEPTH = 50;
-
-enum Is_found
-{
-    FOUND     = 1,
-    NOT_FOUND = 0,
-};
 
 #endif //TREE_H
