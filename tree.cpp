@@ -23,36 +23,36 @@ static void Recursive_tree_save(Node* node, FILE* file_ctor);
 
 //-------------------------------------------------global---------------------------------------------------------------
 
-void Tree_dtor(Node* node)
+void Tree_dtor(Node* node, Pool_allocator* pool_allocator)
 {
     if (!node) { return; }
 
-    if (node->left)  { Tree_dtor(node->left);  }
-    if (node->right) { Tree_dtor(node->right); }
+    if (node->left)  { Tree_dtor(node->left, pool_allocator);  }
+    if (node->right) { Tree_dtor(node->right, pool_allocator); }
 
-    free(node);
+    Pool_free(pool_allocator, node);
 }
 
 void Error_handling(Error err)
-{
+{ 
     switch (err)
     {
-    case Error_CLOSE_FILE: { fprintf(stderr, "\nFile opening error\n"); }
+        case Error_CLOSE_FILE: { fprintf(stderr, "\nFile opening error\n"); }
         break;
-    
-    case Error_OPEN_FILE: { fprintf(stderr, "\nFile cloOperation_SINg error\n"); }
-        break;
-
-    case Error_NO_ERROR: { fprintf(stderr, "\nThere are no errors\n"); }
+        
+        case Error_OPEN_FILE: { fprintf(stderr, "\nFile cloOperation_SINg error\n"); }
         break;
 
-    case Error_MEMORY_ALLOCATION_ERROR: { fprintf(stderr, "\nCan't calloc memory for reading\n"); }
+        case Error_NO_ERROR: { fprintf(stderr, "\nThere are no errors\n"); }
         break;
 
-    case Error_READING_THE_FILE: { fprintf(stderr, "\nError reading the file\n"); }
+        case Error_MEMORY_ALLOCATION_ERROR: { fprintf(stderr, "\nCan't calloc memory for reading\n"); }
         break;
 
-    default:
+        case Error_READING_THE_FILE: { fprintf(stderr, "\nError reading the file\n"); }
+        break;
+
+        default:
         break;
     }
 }

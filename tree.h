@@ -6,12 +6,6 @@
 
 #include "Pool_allocator/pool_allocator.h"
 
-#ifdef USE_DEBUG_PRINTF
-    #define DPRINTF(str, ...) fprintf(stderr, str, __VA_ARGS__)
-#else
-    #define DPRINTF(str, ...) ;
-#endif
-
 enum Error
 {
     Error_NO_ERROR                = 0,
@@ -113,7 +107,7 @@ struct Node
 #include "dif_function.h"
 
 Node* Decod_tree(const char* name_file, Pool_allocator* pool_allocator, Error* err);
-void Tree_dtor(Node* node);
+void Tree_dtor(Node* node, Pool_allocator* pool_allocator);
 Error Save_tree(Node* node, const char* name_file);
 void Error_handling(Error err);
 

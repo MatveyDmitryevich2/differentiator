@@ -15,22 +15,18 @@ int main() // FIXME принимать argc argv чтоб передавать �
     Pool_allocator* pool_allocator = Pool_allocator_ctor(sizeof(Node));
     err = Write_html_mode(Dump_html_BEGIN);
     if (err != Error_NO_ERROR) { Error_handling(err); return EXIT_FAILURE; }
-
     Node* root = Decod_tree(NAME_FILE_STOR, pool_allocator, &err);  
     if (err != Error_NO_ERROR) { Error_handling(err); return EXIT_FAILURE; }
-    root = Dif(root, pool_allocator);
-    // Calculation(root);
-    // Simplification(root);
-    Dump_LaTex(root, NAME_FILE_LATEX);
 
-    err = Dump_graphis(root);
+    Dump_LaTex(root, NAME_FILE_LATEX, pool_allocator);
+
     if (err != Error_NO_ERROR) { Error_handling(err); return EXIT_FAILURE;}
     err = Write_html_mode(Dump_html_END);
     if (err != Error_NO_ERROR) { Error_handling(err); return EXIT_FAILURE;}
-
     err = Save_tree(root, NAME_FILE_DTOR);
     if (err != Error_NO_ERROR) { Error_handling(err); return EXIT_FAILURE;}
-    //Tree_dtor(root); 
+    Tree_dtor(root, pool_allocator);
     Pool_allocator_dtor(pool_allocator);
+
     return EXIT_SUCCESS;
 }

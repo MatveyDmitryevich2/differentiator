@@ -3,3 +3,6 @@ dump_LaTex.*
 dump.html
 log
 file_*
+.vscode
+dump.log
+dump_*

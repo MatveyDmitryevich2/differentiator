@@ -2,18 +2,15 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <ctype.h>
+#include <stddef.h>
 #include <assert.h>
-#include <stdbool.h>
 #include <math.h>
 
-int Sravnenie(double a, double b)
+bool Is_equal(double a, double b)
 {
-    int resultat = 0;
-    if (fabs(a - b) < 0.0001) {resultat = 1; }
+    if (fabs(a - b) < 0.0001) { return true; }
 
-    return resultat;
+    return false;
 }
 
 size_t Get_file_size(FILE *file)
