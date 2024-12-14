@@ -8,18 +8,21 @@
 #include <stdbool.h>
 #include <math.h>
 
+#include "dif_function.h"
 #include "utils.h"
 #include "tree_utils.h"
+#include "com.h"
+#include "tree.h"
 
 
 static void Fold_constants(Node* node);
 static void Reduce_redundant_ops(Node* node, Pool_allocator* pool_allocator);
-// static void Create_node_op(Node* node, Node* parent, Types type, Operation operation, Node* left, Node* right);
+static void Link_node_dif(Node* node, Node* parent, Node* left, Node* right, Element elem);
 
 static Node* Add_dif   (Node* node, Pool_allocator* Pool_allocator);
 static Node* Sub_dif   (Node* node, Pool_allocator* Pool_allocator);
 static Node* Mul_dif   (Node* node, Pool_allocator* Pool_allocator);
-static Node* Dif_dif   (Node* node, Pool_allocator* Pool_allocator);
+static Node* Dif_div   (Node* node, Pool_allocator* Pool_allocator);
 static Node* Cos_dif   (Node* node, Pool_allocator* Pool_allocator);
 static Node* Sin_dif   (Node* node, Pool_allocator* Pool_allocator);
 static Node* Ln_dif    (Node* node, Pool_allocator* Pool_allocator);
@@ -32,7 +35,7 @@ static Node* Sh_dif    (Node* node, Pool_allocator* Pool_allocator);
 static Node* Ch_dif    (Node* node, Pool_allocator* Pool_allocator);
 static Node* Th_dif    (Node* node, Pool_allocator* Pool_allocator);
 static Node* Cth_dif   (Node* node, Pool_allocator* Pool_allocator);
-static Node* ArcSin_dif(Node* node, Pool_allocator* Pool_allocator);
+static Node* Arcsin_dif(Node* node, Pool_allocator* Pool_allocator);
 static Node* Arccos_dif(Node* node, Pool_allocator* Pool_allocator);
 static Node* Arctg_dif (Node* node, Pool_allocator* Pool_allocator);
 static Node* Arcctg_dif(Node* node, Pool_allocator* Pool_allocator);
@@ -156,15 +159,6 @@ static void Fold_constants(Node* node)
     #undef CASE_ANOTHER
 }
 
-// static void Create_node_op(Node* node, Node* parent, Types type, Operation operation, Node* left, Node* right)
-// {
-//     node->parent = parent;
-//     node->elem.type = type;
-//     node->elem.argument.operation = operation;
-//     node->left = left;
-//     node->right = right;
-// }
-
 static void Reduce_redundant_ops(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
@@ -191,12 +185,8 @@ static void Reduce_redundant_ops(Node* node, Pool_allocator* pool_allocator)
             default: { assert(0 && "No tipes"); }                                                                \
         }                                                                                                        \
                                                                                                                  \
-        if (node->fun->left != NULL)  { node->fun = node->fun->left; }                                           \
-        if (node->fun->right != NULL) { node->num = node->fun->right; }                                          \
-                                                                                                                 \
-        if ((node->fun->left == NULL) && (node->fun->right == NULL)) { node->left = NULL; node->right = NULL; }  \
-        else if ((node->fun->left != NULL) && (node->fun->right == NULL)) { node->right = NULL; }                \
-        else if ((node->fun->left == NULL) && (node->fun->right != NULL)) { node->left = NULL; }                 \
+        node->num = node->fun->num;                                                                              \
+        node->fun = node->fun->fun;                                                                              \
                                                                                                                  \
         free(one_or_null);                                                                                       \
         free(f);
@@ -334,7 +324,7 @@ static Node* Dif_operation(Node* node, Pool_allocator* pool_allocator)
         case Operation_SUB:    { return Sub_dif    (node, pool_allocator); }
         case Operation_ADD:    { return Add_dif    (node, pool_allocator); }
         case Operation_MUL:    { return Mul_dif    (node, pool_allocator); }
-        case Operation_DIV:    { return Dif_dif    (node, pool_allocator); }
+        case Operation_DIV:    { return Dif_div    (node, pool_allocator); }
         case Operation_COS:    { return Cos_dif    (node, pool_allocator); }
         case Operation_SIN:    { return Sin_dif    (node, pool_allocator); }
         case Operation_TG:     { return Tg_dif     (node, pool_allocator); }
@@ -343,7 +333,7 @@ static Node* Dif_operation(Node* node, Pool_allocator* pool_allocator)
         case Operation_CH:     { return Ch_dif     (node, pool_allocator); }
         case Operation_TH:     { return Th_dif     (node, pool_allocator); }
         case Operation_CTH:    { return Cth_dif    (node, pool_allocator); }
-        case Operation_ARCSIN: { return ArcSin_dif (node, pool_allocator); }
+        case Operation_ARCSIN: { return Arcsin_dif (node, pool_allocator); }
         case Operation_ARCCOS: { return Arccos_dif (node, pool_allocator); }
         case Operation_ARCTG:  { return Arctg_dif  (node, pool_allocator); }
         case Operation_ARCCTG: { return Arcctg_dif (node, pool_allocator); }
@@ -360,9 +350,19 @@ static Node* Dif_operation(Node* node, Pool_allocator* pool_allocator)
 }
 //(Element){.type = Types_VARIABLE, .argument.variable = 'x'}
 
+static void Link_node_dif(Node* node, Node* parent, Node* left, Node* right, Element elem)
+{
+    node->parent = parent;
+    node->left = left;
+    node->right = right;
+
+    node->elem = elem;
+}
+
 static Node* Arcctg_dif(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
+    assert(pool_allocator != NULL);
 
     Node* r = (Node*)Pool_alloc(pool_allocator);
     Node* r_l = (Node*)Pool_alloc(pool_allocator);
@@ -372,53 +372,27 @@ static Node* Arcctg_dif(Node* node, Pool_allocator* pool_allocator)
     Node* l_l = (Node*)Pool_alloc(pool_allocator);
 
     Node* r_r_l = NULL;
-    if (node->left != NULL) { r_r_l = Сopy_branch(node->left, NULL, r_r, pool_allocator); }
-    if (node->right != NULL) { r_r_l = Сopy_branch(node->right, NULL, r_r, pool_allocator); }
+    if (node->left  != NULL) { r_r_l = Сopy_branch(node->left,   r_r, pool_allocator); }
+    if (node->right != NULL) { r_r_l = Сopy_branch(node->right,  r_r, pool_allocator); }
     
     Node* l_r = NULL;
-    if (node->left != NULL) { l_r = Сopy_branch(node->left, NULL, l, pool_allocator); l_r = Dif(l_r, pool_allocator); }
-    if (node->right != NULL) { l_r = Сopy_branch(node->right, NULL, l, pool_allocator); l_r = Dif(l_r, pool_allocator); }
+    if (node->left != NULL) { l_r = Сopy_branch(node->left,  l, pool_allocator); l_r = Dif(l_r, pool_allocator); }
+    if (node->right != NULL) { l_r = Сopy_branch(node->right,  l, pool_allocator); l_r = Dif(l_r, pool_allocator); }
 
-    l_l->parent = l;
-    l_l->elem.type = Types_NUMBER;
-    l_l->elem.argument.number = -1;
+    Link_node_dif(l_l, l, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = -1}});
+    Link_node_dif(l, node, l_l, l_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_MUL}});
+    Link_node_dif(r, node, r_l, r_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_ADD}});
+    Link_node_dif(r_l, r, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = 1}});
+    Link_node_dif(r_r, r, r_r_l, r_r_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_POWER}});
+    Link_node_dif(r_r_r, r_r, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = 2}});
 
-    // FIXME макрос или функция ВЕЗДЕ!!!
-    l->parent = node;
-    l->elem.type = Types_OPERATION;
-    l->elem.argument.operation = Operation_MUL;
-    l->left = l_l;
-    l->right = l_r;
+    Node* node_dtor = NULL;
+    if (node->left  != NULL) { node_dtor = node->left;  }
+    if (node->right != NULL) { node_dtor = node->right; }
 
-    r->parent = node;
-    r->elem.type = Types_OPERATION;
-    r->elem.argument.operation = Operation_ADD;
-    r->left = r_l;
-    r->right = r_r;
+    Link_node_dif(node, node->parent, l, r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_DIV}});
 
-    r_r->parent = r;
-    r_r->elem.type = Types_OPERATION;
-    r_r->elem.argument.operation = Operation_POWER;
-    r_r->left = r_r_l;
-    r_r->right = r_r_r;
-
-    r_l->parent = r;
-    r_l->elem.type = Types_NUMBER;
-    r_l->elem.argument.number = 1;
-
-    r_r_r->parent = r_r;
-    r_r_r->elem.type = Types_NUMBER;
-    r_r_r->elem.argument.number = 2;
-
-    Node* left_dtor = node->left;
-    Node* right_dtor = node->right;
-
-    node->elem.argument.operation = Operation_DIV;
-    node->left = l;
-    node->right = r;
-
-    Tree_dtor(left_dtor, pool_allocator);
-    Tree_dtor(right_dtor, pool_allocator);
+    Tree_dtor(node_dtor, pool_allocator);
 
     return node;
 }
@@ -426,49 +400,33 @@ static Node* Arcctg_dif(Node* node, Pool_allocator* pool_allocator)
 static Node* Arctg_dif(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
+    assert(pool_allocator != NULL);
 
     Node* r = (Node*)Pool_alloc(pool_allocator);
     Node* r_l = (Node*)Pool_alloc(pool_allocator);
-    Node* r_r_r = (Node*)Pool_alloc(pool_allocator);
     Node* r_r = (Node*)Pool_alloc(pool_allocator);
+    Node* r_r_r = (Node*)Pool_alloc(pool_allocator);
 
     Node* r_r_l = NULL;
-    if (node->left != NULL) { r_r_l = Сopy_branch(node->left, NULL, r_r, pool_allocator); }
-    if (node->right != NULL) { r_r_l = Сopy_branch(node->right, NULL, r_r, pool_allocator); }
+    if (node->left != NULL) { r_r_l = Сopy_branch(node->left,  r_r, pool_allocator); }
+    if (node->right != NULL) { r_r_l = Сopy_branch(node->right,  r_r, pool_allocator); }
     
     Node* l = NULL;
-    if (node->left != NULL) { l = Сopy_branch(node->left, NULL, node, pool_allocator); l = Dif(l, pool_allocator); }
-    if (node->right != NULL) { l = Сopy_branch(node->right, NULL, node, pool_allocator); l = Dif(l, pool_allocator); }
+    if (node->left != NULL) { l = Сopy_branch(node->left,  node, pool_allocator); l = Dif(l, pool_allocator); }
+    if (node->right != NULL) { l = Сopy_branch(node->right,  node, pool_allocator); l = Dif(l, pool_allocator); }
 
-    r->parent = node;
-    r->elem.type = Types_OPERATION;
-    r->elem.argument.operation = Operation_ADD;
-    r->left = r_l;
-    r->right = r_r;
+    Link_node_dif(r, node, r_l, r_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_ADD}});
+    Link_node_dif(r_l, r, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = 1}});
+    Link_node_dif(r_r, r, r_r_l, r_r_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_POWER}});
+    Link_node_dif(r_r_r, r_r, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = 2}});
 
-    r_r->parent = r;
-    r_r->elem.type = Types_OPERATION;
-    r_r->elem.argument.operation = Operation_POWER;
-    r_r->left = r_r_l;
-    r_r->right = r_r_r;
+    Node* node_dtor = NULL;
+    if (node->left  != NULL) { node_dtor = node->left;  }
+    if (node->right != NULL) { node_dtor = node->right; }
 
-    r_l->parent = r;
-    r_l->elem.type = Types_NUMBER;
-    r_l->elem.argument.number = 1;
+    Link_node_dif(node, node->parent, l, r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_DIV}});
 
-    r_r_r->parent = r_r;
-    r_r_r->elem.type = Types_NUMBER;
-    r_r_r->elem.argument.number = 2;
-
-    Node* left_dtor = node->left;
-    Node* right_dtor = node->right;
-
-    node->elem.argument.operation = Operation_DIV;
-    node->left = l;
-    node->right = r;
-
-    Tree_dtor(left_dtor, pool_allocator);
-    Tree_dtor(right_dtor, pool_allocator);
+    Tree_dtor(node_dtor, pool_allocator);
 
     return node;
 }
@@ -476,6 +434,7 @@ static Node* Arctg_dif(Node* node, Pool_allocator* pool_allocator)
 static Node* Arccos_dif(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
+    assert(pool_allocator != NULL);
 
     Node* r = (Node*)Pool_alloc(pool_allocator);
     Node* r_r = (Node*)Pool_alloc(pool_allocator);
@@ -487,69 +446,39 @@ static Node* Arccos_dif(Node* node, Pool_allocator* pool_allocator)
     Node* l_l = (Node*)Pool_alloc(pool_allocator);
 
     Node* r_l_r_l = NULL;
-    if (node->left != NULL) { r_l_r_l = Сopy_branch(node->left, NULL, r_l_r, pool_allocator); }
-    if (node->right != NULL) { r_l_r_l = Сopy_branch(node->right, NULL, r_l_r, pool_allocator); }
+    if (node->left != NULL) { r_l_r_l = Сopy_branch(node->left,  r_l_r, pool_allocator); }
+    if (node->right != NULL) { r_l_r_l = Сopy_branch(node->right,  r_l_r, pool_allocator); }
     
     Node* l_r = NULL;
-    if (node->left != NULL) { l_r = Сopy_branch(node->left, NULL, l, pool_allocator); l_r = Dif(l_r, pool_allocator); }
-    if (node->right != NULL) { l_r = Сopy_branch(node->right, NULL, l, pool_allocator); l_r = Dif(l_r, pool_allocator); }
+    if (node->left != NULL) { l_r = Сopy_branch(node->left,  l, pool_allocator); l_r = Dif(l_r, pool_allocator); }
+    if (node->right != NULL) { l_r = Сopy_branch(node->right,  l, pool_allocator); l_r = Dif(l_r, pool_allocator); }
 
-    l_l->parent = l;
-    l_l->elem.type = Types_NUMBER;
-    l_l->elem.argument.number = -1;
+    Link_node_dif(r, node, r_l, r_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_POWER}});
+    Link_node_dif(r_r, r, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = 0.5}});
+    Link_node_dif(r_l, r, r_l_l, r_l_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_SUB}});
+    Link_node_dif(r_l_l, r_l, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = 1}});
+    Link_node_dif(r_l_r, r_l, r_l_r_l, r_l_r_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_POWER}});
+    Link_node_dif(r_l_r_r, r_l_r, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = 2}});
 
-    l->parent = node;
-    l->elem.type = Types_OPERATION;
-    l->elem.argument.operation = Operation_MUL;
-    l->left = l_l;
-    l->right = l_r;
+    Link_node_dif(l_l, l, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = -1}});
+    Link_node_dif(l, node, l_l, l_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_MUL}});
+    
 
-    r_l_r_r->parent = r_l_r;
-    r_l_r_r->elem.type = Types_NUMBER;
-    r_l_r_r->elem.argument.number = 2;
+    Node* node_dtor = NULL;
+    if (node->left  != NULL) { node_dtor = node->left;  }
+    if (node->right != NULL) { node_dtor = node->right; }
 
-    r_l_r->parent = r_l;
-    r_l_r->elem.type = Types_OPERATION;
-    r_l_r->elem.argument.operation = Operation_POWER;
-    r_l_r->left = r_l_r_l;
-    r_l_r->right = r_l_r_r;
+    Link_node_dif(node, node->parent, l, r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_DIV}});
 
-    r_l_l->parent = r_l;
-    r_l_l->elem.type = Types_NUMBER;
-    r_l_l->elem.argument.number = 1;
-
-    r_l->parent = r;
-    r_l->elem.type = Types_OPERATION;
-    r_l->elem.argument.operation = Operation_SUB;
-    r_l->left = r_l_l;
-    r_l->right = r_l_r;
-
-    r_r->parent = r;
-    r_r->elem.type = Types_NUMBER;
-    r_r->elem.argument.number = 0.5;
-
-    r->parent = node;
-    r->elem.type = Types_OPERATION;
-    r->elem.argument.operation = Operation_POWER;
-    r->left = r_l;
-    r->right = r_r;
-
-    Node* left_dtor = node->left;
-    Node* right_dtor = node->right;
-
-    node->elem.argument.operation = Operation_DIV;
-    node->left = l;
-    node->right = r;
-
-    Tree_dtor(left_dtor, pool_allocator);
-    Tree_dtor(right_dtor, pool_allocator);
+    Tree_dtor(node_dtor, pool_allocator);
 
     return node;
 }
 
-static Node* ArcSin_dif(Node* node, Pool_allocator* pool_allocator)
+static Node* Arcsin_dif(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
+    assert(pool_allocator != NULL);
 
     Node* r = (Node*)Pool_alloc(pool_allocator);
     Node* r_r = (Node*)Pool_alloc(pool_allocator);
@@ -559,52 +488,27 @@ static Node* ArcSin_dif(Node* node, Pool_allocator* pool_allocator)
     Node* r_l_r_r = (Node*)Pool_alloc(pool_allocator);
 
     Node* r_l_r_l = NULL;
-    if (node->left != NULL) { r_l_r_l = Сopy_branch(node->left, NULL, r_l_r, pool_allocator); }
-    if (node->right != NULL) { r_l_r_l = Сopy_branch(node->right, NULL, r_l_r, pool_allocator); }
+    if (node->left != NULL) { r_l_r_l = Сopy_branch(node->left,  r_l_r, pool_allocator); }
+    if (node->right != NULL) { r_l_r_l = Сopy_branch(node->right,  r_l_r, pool_allocator); }
     
     Node* l = NULL;
-    if (node->left != NULL) { l = Сopy_branch(node->left, NULL, node, pool_allocator); l = Dif(l, pool_allocator); }
-    if (node->right != NULL) { l = Сopy_branch(node->right, NULL, node, pool_allocator); l = Dif(l, pool_allocator); }
+    if (node->left != NULL) { l = Сopy_branch(node->left,  node, pool_allocator); l = Dif(l, pool_allocator); }
+    if (node->right != NULL) { l = Сopy_branch(node->right,  node, pool_allocator); l = Dif(l, pool_allocator); }
 
-    r_l_r_r->parent = r_l_r;
-    r_l_r_r->elem.type = Types_NUMBER;
-    r_l_r_r->elem.argument.number = 2;
+    Link_node_dif(r, node, r_l, r_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_POWER}});
+    Link_node_dif(r_r, r, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = 0.5}});
+    Link_node_dif(r_l, r, r_l_l, r_l_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_SUB}});
+    Link_node_dif(r_l_l, r_l, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = 1}});
+    Link_node_dif(r_l_r, r_l, r_l_r_l, r_l_r_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_POWER}});
+    Link_node_dif(r_l_r_r, r_l_r, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = 2}});
 
-    r_l_r->parent = r_l;
-    r_l_r->elem.type = Types_OPERATION;
-    r_l_r->elem.argument.operation = Operation_POWER;
-    r_l_r->left = r_l_r_l;
-    r_l_r->right = r_l_r_r;
+    Node* node_dtor = NULL;
+    if (node->left  != NULL) { node_dtor = node->left;  }
+    if (node->right != NULL) { node_dtor = node->right; }
 
-    r_l_l->parent = r_l;
-    r_l_l->elem.type = Types_NUMBER;
-    r_l_l->elem.argument.number = 1;
+    Link_node_dif(node, node->parent, l, r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_DIV}});
 
-    r_l->parent = r;
-    r_l->elem.type = Types_OPERATION;
-    r_l->elem.argument.operation = Operation_SUB;
-    r_l->left = r_l_l;
-    r_l->right = r_l_r;
-
-    r_r->parent = r;
-    r_r->elem.type = Types_NUMBER;
-    r_r->elem.argument.number = 0.5;
-
-    r->parent = node;
-    r->elem.type = Types_OPERATION;
-    r->elem.argument.operation = Operation_POWER;
-    r->left = r_l;
-    r->right = r_r;
-
-    Node* left_dtor = node->left;
-    Node* right_dtor = node->right;
-
-    node->elem.argument.operation = Operation_DIV;
-    node->left = l;
-    node->right = r;
-
-    Tree_dtor(left_dtor, pool_allocator);
-    Tree_dtor(right_dtor, pool_allocator);
+    Tree_dtor(node_dtor, pool_allocator);
 
     return node;
 }
@@ -612,43 +516,31 @@ static Node* ArcSin_dif(Node* node, Pool_allocator* pool_allocator)
 static Node* Cth_dif(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
+    assert(pool_allocator != NULL);
 
     Node* r = (Node*)Pool_alloc(pool_allocator);
     Node* r_r = (Node*)Pool_alloc(pool_allocator);
     Node* r_l = (Node*)Pool_alloc(pool_allocator);
 
     Node* r_l_l = NULL;
-    if (node->left != NULL) { r_l_l = Сopy_branch(node->left, NULL, r_l, pool_allocator); }
-    if (node->right != NULL) { r_l_l = Сopy_branch(node->right, NULL, r_l, pool_allocator); }
+    if (node->left != NULL) { r_l_l = Сopy_branch(node->left,  r_l, pool_allocator); }
+    if (node->right != NULL) { r_l_l = Сopy_branch(node->right,  r_l, pool_allocator); }
     
     Node* l = NULL;
-    if (node->left != NULL) { l = Сopy_branch(node->left, NULL, node, pool_allocator); l = Dif(l, pool_allocator); }
-    if (node->right != NULL) { l = Сopy_branch(node->right, NULL, node, pool_allocator); l = Dif(l, pool_allocator); }
+    if (node->left != NULL) { l = Сopy_branch(node->left,  node, pool_allocator); l = Dif(l, pool_allocator); }
+    if (node->right != NULL) { l = Сopy_branch(node->right,  node, pool_allocator); l = Dif(l, pool_allocator); }
 
-    r_l->parent = r;
-    r_l->elem.type = Types_OPERATION;
-    r_l->elem.argument.operation = Operation_SH;
-    r_l->left = r_l_l;
+    Link_node_dif(r, node, r_l, r_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_POWER}});
+    Link_node_dif(r_r, r, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = 2}});
+    Link_node_dif(r_l, r, r_l_l, NULL, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_SH}});
 
-    r_r->parent = r;
-    r_r->elem.type = Types_NUMBER;
-    r_r->elem.argument.number = 2;
+    Node* node_dtor = NULL;
+    if (node->left  != NULL) { node_dtor = node->left;  }
+    if (node->right != NULL) { node_dtor = node->right; }
 
-    r->parent = node;
-    r->elem.type = Types_OPERATION;
-    r->elem.argument.operation = Operation_POWER;
-    r->left = r_l;
-    r->right = r_r;
+    Link_node_dif(node, node->parent, l, r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_DIV}});
 
-    Node* left_dtor = node->left;
-    Node* right_dtor = node->right;
-
-    node->elem.argument.operation = Operation_DIV;
-    node->left = l;
-    node->right = r;
-
-    Tree_dtor(left_dtor, pool_allocator);
-    Tree_dtor(right_dtor, pool_allocator);
+    Tree_dtor(node_dtor, pool_allocator);
 
     return node;
 }
@@ -656,43 +548,31 @@ static Node* Cth_dif(Node* node, Pool_allocator* pool_allocator)
 static Node* Th_dif(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
+    assert(pool_allocator != NULL);
 
     Node* r = (Node*)Pool_alloc(pool_allocator);
     Node* r_r = (Node*)Pool_alloc(pool_allocator);
     Node* r_l = (Node*)Pool_alloc(pool_allocator);
 
     Node* r_l_l = NULL;
-    if (node->left != NULL) { r_l_l = Сopy_branch(node->left, NULL, r_l, pool_allocator); }
-    if (node->right != NULL) { r_l_l = Сopy_branch(node->right, NULL, r_l, pool_allocator); }
+    if (node->left != NULL) { r_l_l = Сopy_branch(node->left,  r_l, pool_allocator); }
+    if (node->right != NULL) { r_l_l = Сopy_branch(node->right,  r_l, pool_allocator); }
     
     Node* l = NULL;
-    if (node->left != NULL) { l = Сopy_branch(node->left, NULL, node, pool_allocator); l = Dif(l, pool_allocator); }
-    if (node->right != NULL) { l = Сopy_branch(node->right, NULL, node, pool_allocator); l = Dif(l, pool_allocator); }
+    if (node->left != NULL) { l = Сopy_branch(node->left,  node, pool_allocator); l = Dif(l, pool_allocator); }
+    if (node->right != NULL) { l = Сopy_branch(node->right,  node, pool_allocator); l = Dif(l, pool_allocator); }
 
-    r_l->parent = r;
-    r_l->elem.type = Types_OPERATION;
-    r_l->elem.argument.operation = Operation_CH;
-    r_l->left = r_l_l;
+    Link_node_dif(r, node, r_l, r_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_POWER}});
+    Link_node_dif(r_r, r, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = 2}});
+    Link_node_dif(r_l, r, r_l_l, NULL, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_CH}});
 
-    r_r->parent = r;
-    r_r->elem.type = Types_NUMBER;
-    r_r->elem.argument.number = 2;
+    Node* node_dtor = NULL;
+    if (node->left  != NULL) { node_dtor = node->left;  }
+    if (node->right != NULL) { node_dtor = node->right; }
 
-    r->parent = node;
-    r->elem.type = Types_OPERATION;
-    r->elem.argument.operation = Operation_POWER;
-    r->left = r_l;
-    r->right = r_r;
+    Link_node_dif(node, node->parent, l, r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_DIV}});
 
-    Node* left_dtor = node->left;
-    Node* right_dtor = node->right;
-
-    node->elem.argument.operation = Operation_DIV;
-    node->left = l;
-    node->right = r;
-
-    Tree_dtor(left_dtor, pool_allocator);
-    Tree_dtor(right_dtor, pool_allocator);
+    Tree_dtor(node_dtor, pool_allocator);
 
     return node;
 }
@@ -700,9 +580,7 @@ static Node* Th_dif(Node* node, Pool_allocator* pool_allocator)
 static Node* Ch_dif(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
-
-    Node* r = Сopy_branch(node->right, NULL, node, pool_allocator);
-    r = Dif(r, pool_allocator);
+    assert(pool_allocator != NULL);
 
     Node* l = (Node*)Pool_alloc(pool_allocator);
     Node* l_r = (Node*)Pool_alloc(pool_allocator);
@@ -713,58 +591,32 @@ static Node* Ch_dif(Node* node, Pool_allocator* pool_allocator)
     Node* l_l_r_l_r = (Node*)Pool_alloc(pool_allocator);
 
     Node* l_l_l_l = NULL;
-    if (node->left != NULL) { l_l_l_l = Сopy_branch(node->left, NULL, l_l_l, pool_allocator); }
-    if (node->right != NULL) { l_l_l_l = Сopy_branch(node->right, NULL, l_l_l, pool_allocator); }
+    if (node->left != NULL) { l_l_l_l = Сopy_branch(node->left,  l_l_l, pool_allocator); }
+    if (node->right != NULL) { l_l_l_l = Сopy_branch(node->right,  l_l_l, pool_allocator); }
     
     Node* l_l_r_l_l = NULL;
-    if (node->left != NULL) { l_l_r_l_l = Сopy_branch(node->left, NULL, l_l_r_l, pool_allocator); }
-    if (node->right != NULL) { l_l_r_l_l = Сopy_branch(node->right, NULL, l_l_r_l, pool_allocator); }
+    if (node->left != NULL) { l_l_r_l_l = Сopy_branch(node->left,  l_l_r_l, pool_allocator); }
+    if (node->right != NULL) { l_l_r_l_l = Сopy_branch(node->right,  l_l_r_l, pool_allocator); }
 
-    l_l_r_l_r->parent = l_l_r_l;
-    l_l_r_l_r->elem.type = Types_NUMBER;
-    l_l_r_l_r->elem.argument.number = -1;
+    Node* r = NULL;
+    if (node->left != NULL) { r = Сopy_branch(node->left,  node, pool_allocator); r = Dif(r, pool_allocator); }
+    if (node->right != NULL) { r = Сopy_branch(node->right,  node, pool_allocator); r = Dif(r, pool_allocator); }
 
-    l_l_r_l->parent = l_l_r;
-    l_l_r_l->elem.type = Types_OPERATION;
-    l_l_r_l->elem.argument.operation = Operation_POWER;
-    l_l_r_l->left = l_l_r_l_l;
-    l_l_r_l->right = l_l_r_l_r;
+    Link_node_dif(l, node, l_l, l_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_DIV}});
+    Link_node_dif(l_l, l, l_l_l, l_l_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_SUB}});
+    Link_node_dif(l_r, l, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = 2}});
+    Link_node_dif(l_l_l, l_l, l_l_l_l, NULL, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_EXP}});
+    Link_node_dif(l_l_r, l_l, l_l_r_l, NULL, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_EXP}});
+    Link_node_dif(l_l_r_l, l_l_r, l_l_r_l_l, l_l_r_l_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_POWER}});
+    Link_node_dif(l_l_r_l_r, l_l_r_l, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = -1}});
 
-    l_l_r->parent = l_l;
-    l_l_r->elem.type = Types_OPERATION;
-    l_l_r->elem.argument.operation = Operation_EXP;
-    l_l_r->left = l_l_r_l;
+    Node* node_dtor = NULL;
+    if (node->left  != NULL) { node_dtor = node->left;  }
+    if (node->right != NULL) { node_dtor = node->right; }
 
-    l_l_l->parent = l_l;
-    l_l_l->elem.type = Types_OPERATION;
-    l_l_l->elem.argument.operation = Operation_EXP;
-    l_l_l->left = l_l_l_l;
+    Link_node_dif(node, node->parent, l, r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_MUL}});
 
-    l_l->parent = l;
-    l_l->elem.type = Types_OPERATION;
-    l_l->elem.argument.operation = Operation_SUB;
-    l_l->left = l_l_l;
-    l_l->right = l_l_r;
-
-    l_r->parent = l;
-    l_r->elem.type = Types_NUMBER;
-    l_r->elem.argument.number = 2;
-
-    l->parent = node;
-    l->elem.type = Types_OPERATION;
-    l->elem.argument.operation = Operation_DIV;
-    l->left = l_l;
-    l->right = l_r;
-
-    Node* left_dtor = node->left;
-    Node* right_dtor = node->right;
-
-    node->elem.argument.operation = Operation_MUL;
-    node->left = l;
-    node->right = r;
-
-    Tree_dtor(left_dtor, pool_allocator);
-    Tree_dtor(right_dtor, pool_allocator);
+    Tree_dtor(node_dtor, pool_allocator);
 
     return node;
 }
@@ -772,9 +624,7 @@ static Node* Ch_dif(Node* node, Pool_allocator* pool_allocator)
 static Node* Sh_dif(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
-
-    Node* r = Сopy_branch(node->right, NULL, node, pool_allocator);
-    r = Dif(r, pool_allocator);
+    assert(pool_allocator != NULL);
 
     Node* l = (Node*)Pool_alloc(pool_allocator);
     Node* l_r = (Node*)Pool_alloc(pool_allocator);
@@ -785,58 +635,32 @@ static Node* Sh_dif(Node* node, Pool_allocator* pool_allocator)
     Node* l_l_r_l_r = (Node*)Pool_alloc(pool_allocator);
 
     Node* l_l_l_l = NULL;
-    if (node->left != NULL) { l_l_l_l = Сopy_branch(node->left, NULL, l_l_l, pool_allocator); }
-    if (node->right != NULL) { l_l_l_l = Сopy_branch(node->right, NULL, l_l_l, pool_allocator); }
+    if (node->left != NULL) { l_l_l_l = Сopy_branch(node->left,  l_l_l, pool_allocator); }
+    if (node->right != NULL) { l_l_l_l = Сopy_branch(node->right,  l_l_l, pool_allocator); }
     
     Node* l_l_r_l_l = NULL;
-    if (node->left != NULL) { l_l_r_l_l = Сopy_branch(node->left, NULL, l_l_r_l, pool_allocator); }
-    if (node->right != NULL) { l_l_r_l_l = Сopy_branch(node->right, NULL, l_l_r_l, pool_allocator); }
+    if (node->left != NULL) { l_l_r_l_l = Сopy_branch(node->left,  l_l_r_l, pool_allocator); }
+    if (node->right != NULL) { l_l_r_l_l = Сopy_branch(node->right,  l_l_r_l, pool_allocator); }
 
-    l_l_r_l_r->parent = l_l_r_l;
-    l_l_r_l_r->elem.type = Types_NUMBER;
-    l_l_r_l_r->elem.argument.number = -1;
+    Node* r = NULL;
+    if (node->left != NULL) { r = Сopy_branch(node->left,  node, pool_allocator); r = Dif(r, pool_allocator); }
+    if (node->right != NULL) { r = Сopy_branch(node->right,  node, pool_allocator); r = Dif(r, pool_allocator); }
 
-    l_l_r_l->parent = l_l_r;
-    l_l_r_l->elem.type = Types_OPERATION;
-    l_l_r_l->elem.argument.operation = Operation_POWER;
-    l_l_r_l->left = l_l_r_l_l;
-    l_l_r_l->right = l_l_r_l_r;
+    Link_node_dif(l, node, l_l, l_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_DIV}});
+    Link_node_dif(l_l, l, l_l_l, l_l_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_ADD}});
+    Link_node_dif(l_r, l, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = 2}});
+    Link_node_dif(l_l_l, l_l, l_l_l_l, NULL, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_EXP}});
+    Link_node_dif(l_l_r, l_l, l_l_r_l, NULL, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_EXP}});
+    Link_node_dif(l_l_r_l, l_l_r, l_l_r_l_l, l_l_r_l_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_POWER}});
+    Link_node_dif(l_l_r_l_r, l_l_r_l, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = -1}});
 
-    l_l_r->parent = l_l;
-    l_l_r->elem.type = Types_OPERATION;
-    l_l_r->elem.argument.operation = Operation_EXP;
-    l_l_r->left = l_l_r_l;
+    Node* node_dtor = NULL;
+    if (node->left  != NULL) { node_dtor = node->left;  }
+    if (node->right != NULL) { node_dtor = node->right; }
 
-    l_l_l->parent = l_l;
-    l_l_l->elem.type = Types_OPERATION;
-    l_l_l->elem.argument.operation = Operation_EXP;
-    l_l_l->left = l_l_l_l;
+    Link_node_dif(node, node->parent, l, r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_MUL}});
 
-    l_l->parent = l;
-    l_l->elem.type = Types_OPERATION;
-    l_l->elem.argument.operation = Operation_ADD;
-    l_l->left = l_l_l;
-    l_l->right = l_l_r;
-
-    l_r->parent = l;
-    l_r->elem.type = Types_NUMBER;
-    l_r->elem.argument.number = 2;
-
-    l->parent = node;
-    l->elem.type = Types_OPERATION;
-    l->elem.argument.operation = Operation_DIV;
-    l->left = l_l;
-    l->right = l_r;
-
-    Node* left_dtor = node->left;
-    Node* right_dtor = node->right;
-
-    node->elem.argument.operation = Operation_MUL;
-    node->left = l;
-    node->right = r;
-
-    Tree_dtor(left_dtor, pool_allocator);
-    Tree_dtor(right_dtor, pool_allocator);
+    Tree_dtor(node_dtor, pool_allocator);
 
     return node;
 }
@@ -844,58 +668,35 @@ static Node* Sh_dif(Node* node, Pool_allocator* pool_allocator)
 static Node* Ctg_dif(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
+    assert(pool_allocator != NULL);
 
-    Node* right_right = (Node*)Pool_alloc(pool_allocator);
-    Node* right = (Node*)Pool_alloc(pool_allocator);
+    Node* l = (Node*)Pool_alloc(pool_allocator);
+    Node* r = (Node*)Pool_alloc(pool_allocator);
+    Node* r_r = (Node*)Pool_alloc(pool_allocator);
+    Node* r_l = (Node*)Pool_alloc(pool_allocator);
+    Node* l_r = (Node*)Pool_alloc(pool_allocator);
 
-    right_right->parent = right;
-    right_right->elem.type = Types_NUMBER;
-    right_right->elem.argument.number = 2;
-
-    Node* right_left = (Node*)Pool_alloc(pool_allocator);
-
-    Node* right_left_left = NULL;
-    if (node->left != NULL) { right_left_left = Сopy_branch(node->left, NULL, right_left, pool_allocator); }
-    if (node->right != NULL) { right_left_left = Сopy_branch(node->right, NULL, right_left, pool_allocator); }
+    Node* l_l = NULL;
+    if (node->left != NULL) { l_l = Сopy_branch(node->left,  l, pool_allocator); l_l = Dif(l_l, pool_allocator); }
+    if (node->right != NULL) { l_l = Сopy_branch(node->right,  l, pool_allocator); l_l = Dif(l_l, pool_allocator); }
     
+    Node* r_l_l = NULL;
+    if (node->left != NULL) { r_l_l = Сopy_branch(node->left,  r_l, pool_allocator); }
+    if (node->right != NULL) { r_l_l = Сopy_branch(node->right,  r_l, pool_allocator); }
 
-    right_left->parent = right;
-    right_left->elem.type = Types_OPERATION;
-    right_left->elem.argument.operation = Operation_SIN;
-    right_left->left = right_left_left;
+    Link_node_dif(l, node, l_l, l_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_MUL}});
+    Link_node_dif(l_r, l, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = -1}});
+    Link_node_dif(r, node, r_l, r_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_POWER}});
+    Link_node_dif(r_r, r, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = 2}});
+    Link_node_dif(r_l, r, r_l_l, NULL, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_SIN}});
 
-    right->parent = node;
-    right->elem.type = Types_OPERATION;
-    right->elem.argument.operation = Operation_POWER;
-    right->left = right_left;
-    right->right = right_right;
+    Node* node_dtor = NULL;
+    if (node->left  != NULL) { node_dtor = node->left;  }
+    if (node->right != NULL) { node_dtor = node->right; }
 
-    Node* left = (Node*)Pool_alloc(pool_allocator);
-    left->parent = node;
-    left->elem.type = Types_OPERATION;
-    left->elem.argument.operation = Operation_MUL;
+    Link_node_dif(node, node->parent, l, r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_DIV}});
 
-    Node* left_right = (Node*)Pool_alloc(pool_allocator);
-    left_right->elem.type = Types_NUMBER;
-    left_right->elem.argument.number = -1;
-    left_right->parent = left;
-
-    Node* left_left = NULL;
-    if (node->left != NULL) { left_left = Сopy_branch(node->left, NULL, left, pool_allocator); left_left = Dif(left_left, pool_allocator); }
-    if (node->right != NULL) { left_left = Сopy_branch(node->right, NULL, left, pool_allocator); left_left = Dif(left_left, pool_allocator); }
-
-    left->left = left_left;
-    left->right = left_right;
-
-    Node* left_dtor = node->left;
-    Node* right_dtor = node->right;
-
-    node->elem.argument.operation = Operation_DIV;
-    node->left = left;
-    node->right = right;
-
-    Tree_dtor(left_dtor, pool_allocator);
-    Tree_dtor(right_dtor, pool_allocator);
+    Tree_dtor(node_dtor, pool_allocator);
 
     return node;
 }
@@ -903,44 +704,31 @@ static Node* Ctg_dif(Node* node, Pool_allocator* pool_allocator)
 static Node* Tg_dif(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
+    assert(pool_allocator != NULL);
 
-    Node* right_right = (Node*)Pool_alloc(pool_allocator);
-    Node* right = (Node*)Pool_alloc(pool_allocator);
+    Node* r = (Node*)Pool_alloc(pool_allocator);
+    Node* r_r = (Node*)Pool_alloc(pool_allocator);
+    Node* r_l = (Node*)Pool_alloc(pool_allocator);
 
-    right_right->parent = right;
-    right_right->elem.type = Types_NUMBER;
-    right_right->elem.argument.number = 2;
-
-    Node* right_left = (Node*)Pool_alloc(pool_allocator);
+    Node* l = NULL;
+    if (node->left != NULL) { l = Сopy_branch(node->left,  node, pool_allocator); l = Dif(l, pool_allocator); }
+    if (node->right != NULL) { l = Сopy_branch(node->right,  node, pool_allocator); l = Dif(l, pool_allocator); }
     
-    Node* right_left_left = NULL;
-    if (node->left != NULL) { right_left_left = Сopy_branch(node->left, NULL, right_left, pool_allocator); }
-    if (node->right != NULL) { right_left_left = Сopy_branch(node->right, NULL, right_left, pool_allocator); }
+    Node* r_l_l = NULL;
+    if (node->left != NULL) { r_l_l = Сopy_branch(node->left,  r_l, pool_allocator); }
+    if (node->right != NULL) { r_l_l = Сopy_branch(node->right,  r_l, pool_allocator); }
 
-    right_left->parent = right;
-    right_left->elem.type = Types_OPERATION;
-    right_left->elem.argument.operation = Operation_COS;
-    right_left->left = right_left_left;
+    Link_node_dif(r, node, r_l, r_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_POWER}});
+    Link_node_dif(r_r, r, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = 2}});
+    Link_node_dif(r_l, r, r_l_l, NULL, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_COS}});
 
-    right->parent = node;
-    right->elem.type = Types_OPERATION;
-    right->elem.argument.operation = Operation_POWER;
-    right->left = right_left;
-    right->right = right_right;
+    Node* node_dtor = NULL;
+    if (node->left  != NULL) { node_dtor = node->left;  }
+    if (node->right != NULL) { node_dtor = node->right; }
 
-    Node* left = NULL;
-    if (node->left != NULL) { left = Сopy_branch(node->left, NULL, node, pool_allocator); left = Dif(left, pool_allocator); }
-    if (node->right != NULL) { left = Сopy_branch(node->right, NULL, node, pool_allocator); left = Dif(left, pool_allocator); }
+    Link_node_dif(node, node->parent, l, r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_DIV}});
 
-    Node* left_dtor = node->left;
-    Node* right_dtor = node->right;
-
-    node->elem.argument.operation = Operation_DIV;
-    node->left = left;
-    node->right = right;
-
-    Tree_dtor(left_dtor, pool_allocator);
-    Tree_dtor(right_dtor, pool_allocator);
+    Tree_dtor(node_dtor, pool_allocator);
 
     return node;
 }
@@ -948,32 +736,21 @@ static Node* Tg_dif(Node* node, Pool_allocator* pool_allocator)
 static Node* Exp_dif(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
+    assert(pool_allocator != NULL);
+    
+    Node* l = Сopy_branch(node, node, pool_allocator);
+    
+    Node* r = NULL;
+    if (node->left != NULL) { r = Сopy_branch(node->left,  node, pool_allocator); r = Dif(r, pool_allocator); }
+    if (node->right != NULL) { r = Сopy_branch(node->right,  node, pool_allocator); r = Dif(r, pool_allocator); }
 
-    Node* right = NULL;
+    Node* node_dtor = NULL;
+    if (node->left  != NULL) { node_dtor = node->left;  }
+    if (node->right != NULL) { node_dtor = node->right; }
 
-    if (node->left != NULL)
-    {
-        right = Сopy_branch(node->left, NULL, node, pool_allocator);
-        right = Dif(right, pool_allocator);
-    }
+    Link_node_dif(node, node->parent, l, r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_MUL}});
 
-    else if (node->right != NULL)
-    {
-        right = Сopy_branch(node->right, NULL, node, pool_allocator);
-        right = Dif(right, pool_allocator);
-    }
-
-    Node* left = Сopy_branch(node, NULL, node, pool_allocator);
-
-    Node* left_dtor = node->left;
-    Node* right_dtor = node->right;
-
-    node->elem.argument.operation = Operation_MUL;
-    node->left = left;
-    node->right = right;
-
-    Tree_dtor(left_dtor, pool_allocator);
-    Tree_dtor(right_dtor, pool_allocator);
+    Tree_dtor(node_dtor, pool_allocator);
 
     return node;
 }
@@ -981,34 +758,27 @@ static Node* Exp_dif(Node* node, Pool_allocator* pool_allocator)
 static Node* Power_dif(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
+    assert(pool_allocator != NULL);
 
-    Node* left = (Node*)Pool_alloc(pool_allocator);
-    Node* left_left = Сopy_branch(node->right, NULL, left, pool_allocator);
-    Node* left_right = (Node*)Pool_alloc(pool_allocator);
-    Node* left_right_right = Сopy_branch(node->left, NULL, left_right, pool_allocator);
+    Node* l = (Node*)Pool_alloc(pool_allocator);
+    Node* l_l = (Node*)Pool_alloc(pool_allocator);
 
-    left_right->parent = left;
-    left_right->elem.type = Types_OPERATION;
-    left_right->elem.argument.operation = Operation_LN;
-    left_right->right = left_right_right;
+    Node* r = Сopy_branch(node, node, pool_allocator);
+    Node* l_r = Сopy_branch(node->right, l, pool_allocator);
+    Node* l_l_l = Сopy_branch(node->left, l_l, pool_allocator);
 
-    left->parent = node;
-    left->elem.type = Types_OPERATION;
-    left->elem.argument.operation = Operation_MUL;
-    left->left = left_left;
-    left->right = left_right;
+    Link_node_dif(l, node, l_l, l_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_MUL}});
+    Link_node_dif(l_l, l, l_l_l, NULL, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_LN}});
 
     Node* left_dtor = node->left;
     Node* right_dtor = node->right;
 
-    node->elem.argument.operation = Operation_EXP;
-    node->left = left;
-    node->right = NULL;
+    Link_node_dif(node, node->parent, l, r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_MUL}});
 
     Tree_dtor(left_dtor, pool_allocator);
     Tree_dtor(right_dtor, pool_allocator);
 
-    node = Dif(node, pool_allocator);
+    node->left = Dif(node->left, pool_allocator);
 
     return node;
 }
@@ -1017,28 +787,19 @@ static Node* Log_dif(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
 
-    Node* left = (Node*)Pool_alloc(pool_allocator);
-    Node* right = (Node*)Pool_alloc(pool_allocator);
+    Node* l = (Node*)Pool_alloc(pool_allocator);
+    Node* r = (Node*)Pool_alloc(pool_allocator);
 
-    Node* left_left = Сopy_branch(node->right, NULL, left, pool_allocator);
-    Node* right_left = Сopy_branch(node->left, NULL, right, pool_allocator);
+    Node* l_l = Сopy_branch(node->right,  l, pool_allocator);
+    Node* r_l = Сopy_branch(node->left,  r, pool_allocator);
 
-    left->parent = node;
-    left->left = left_left;
-    left->elem.type = Types_OPERATION;
-    left->elem.argument.operation = Operation_LN;
-
-    right->parent = node;
-    right->left = right_left;
-    right->elem.type = Types_OPERATION;
-    right->elem.argument.operation = Operation_LN;
+    Link_node_dif(l, node, l_l, NULL, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_LN}});
+    Link_node_dif(r, node, r_l, NULL, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_LN}});
 
     Node* left_dtor = node->left;
     Node* right_dtor = node->right;
 
-    node->elem.argument.operation = Operation_DIV;
-    node->left = left;
-    node->right = right;
+    Link_node_dif(node, node->parent, l, r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_DIV}});
 
     Tree_dtor(left_dtor, pool_allocator);
     Tree_dtor(right_dtor, pool_allocator);
@@ -1051,33 +812,23 @@ static Node* Log_dif(Node* node, Pool_allocator* pool_allocator)
 static Node* Ln_dif(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
+    assert(pool_allocator != NULL);
 
-    Node* right = NULL;
-    Node* left = NULL;
+    Node* r = NULL;
+    if (node->left != NULL) { r = Сopy_branch(node->left,  node, pool_allocator); }
+    if (node->right != NULL) { r = Сopy_branch(node->right,  node, pool_allocator); }
+    
+    Node* l = NULL;
+    if (node->left != NULL) { l = Сopy_branch(node->left,  node, pool_allocator); l = Dif(l, pool_allocator); }
+    if (node->right != NULL) { l = Сopy_branch(node->right,  node, pool_allocator); l = Dif(l, pool_allocator); }
 
-    if (node->left != NULL)
-    {
-        right = Сopy_branch(node->left, NULL, node, pool_allocator);
-        left = Сopy_branch(node->left, NULL, node, pool_allocator);
-        left = Dif(left, pool_allocator);
+    Node* node_dtor = NULL;
+    if (node->left  != NULL) { node_dtor = node->left;  }
+    if (node->right != NULL) { node_dtor = node->right; }
 
-        Node* left_dtor = node->left;
-        Tree_dtor(left_dtor, pool_allocator);
-    }
+    Link_node_dif(node, node->parent, l, r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_DIV}});
 
-    else if (node->right != NULL)
-    {
-        right = Сopy_branch(node->right, NULL, node, pool_allocator);
-        left = Сopy_branch(node->right, NULL, node, pool_allocator);
-        left = Dif(left, pool_allocator);
-
-        Node* right_dtor = node->right;
-        Tree_dtor(right_dtor, pool_allocator);
-    }
-
-    node->elem.argument.operation = Operation_DIV;
-    node->left = left;
-    node->right = right;
+    Tree_dtor(node_dtor, pool_allocator);
 
     return node;
 }
@@ -1085,22 +836,19 @@ static Node* Ln_dif(Node* node, Pool_allocator* pool_allocator)
 static Node* Add_dif(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
+    assert(pool_allocator != NULL);
 
-    Node* left = Сopy_branch(node->left, NULL, node, pool_allocator);
-    left = Dif(left, pool_allocator);
-
-    Node* right = Сopy_branch(node->right, NULL, node, pool_allocator);
-    right = Dif(right, pool_allocator);
+    Node* l = Сopy_branch(node->left,  node, pool_allocator); l = Dif(l, pool_allocator);
+    Node* r = Сopy_branch(node->right,  node, pool_allocator); r = Dif(r, pool_allocator);
 
     Node* left_dtor = node->left;
     Node* right_dtor = node->right;
 
-    node->left = left;
-    node->right = right;
+    Link_node_dif(node, node->parent, l, r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_ADD}});
 
     Tree_dtor(left_dtor, pool_allocator);
     Tree_dtor(right_dtor, pool_allocator);
-    
+
     return node;
 }
 
@@ -1108,47 +856,37 @@ static Node* Add_dif(Node* node, Pool_allocator* pool_allocator)
 static Node* Sub_dif(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
+    assert(pool_allocator != NULL);
 
-    Node* left = Сopy_branch(node->left, NULL, node, pool_allocator);
-    left = Dif(left, pool_allocator);
-
-    Node* right = Сopy_branch(node->right, NULL, node, pool_allocator);
-    right = Dif(right, pool_allocator);
+    Node* l = Сopy_branch(node->left,  node, pool_allocator); l = Dif(l, pool_allocator);
+    Node* r = Сopy_branch(node->right,  node, pool_allocator); r = Dif(r, pool_allocator);
 
     Node* left_dtor = node->left;
     Node* right_dtor = node->right;
 
-    node->left = left;
-    node->right = right;
+    Link_node_dif(node, node->parent, l, r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_SUB}});
 
     Tree_dtor(left_dtor, pool_allocator);
     Tree_dtor(right_dtor, pool_allocator);
-    
+
     return node;
 }
 
 static Node* Mul_dif(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
+    assert(pool_allocator != NULL);
 
     Node* left = (Node*)Pool_alloc(pool_allocator);
     Node* right = (Node*)Pool_alloc(pool_allocator);
-    Node* left_left = Сopy_branch(node->right, NULL, left, pool_allocator);
-    Node* right_left = Сopy_branch(node->left, NULL, right, pool_allocator);
-    Node* right_right = Сopy_branch(node->left, NULL, right, pool_allocator);
-    Node* left_right = Сopy_branch(node->right, NULL, left, pool_allocator);
 
-    left->parent = node;
-    left->elem.type = Types_OPERATION;
-    left->elem.argument.operation = Operation_MUL;
-    left->left = left_left;
-    left->right = left_right;
+    Node* left_left = Сopy_branch(node->left, left, pool_allocator);
+    Node* left_right = Сopy_branch(node->right, left, pool_allocator);
+    Node* right_left = Сopy_branch(node->left, right, pool_allocator);
+    Node* right_right = Сopy_branch(node->right, right, pool_allocator);
 
-    right->parent = node;
-    right->elem.type = Types_OPERATION;
-    right->elem.argument.operation = Operation_MUL;
-    right->right = right_right;
-    right->left = right_left;
+    Link_node_dif(left, node, left_left, left_right, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_MUL}});
+    Link_node_dif(right, node, right_left, right_right, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_MUL}});
 
     left_left = Dif(left_left, pool_allocator);
     right_right = Dif(right_right, pool_allocator);
@@ -1166,62 +904,36 @@ static Node* Mul_dif(Node* node, Pool_allocator* pool_allocator)
     return node;
 }
 
-static Node* Dif_dif(Node* node, Pool_allocator* pool_allocator)
+static Node* Dif_div(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
+    assert(pool_allocator != NULL);
 
-    Node* r_right = (Node*)Pool_alloc(pool_allocator);
-    Node* r_right_right = (Node*)Pool_alloc(pool_allocator);
+    Node* l = (Node*)Pool_alloc(pool_allocator);
+    Node* r = (Node*)Pool_alloc(pool_allocator);
+    Node* r_r = (Node*)Pool_alloc(pool_allocator);
+    Node* l_l = (Node*)Pool_alloc(pool_allocator);
+    Node* l_r = (Node*)Pool_alloc(pool_allocator);
 
-    Node* r_right_left = Сopy_branch(node->right, NULL , r_right, pool_allocator);
+    Node* l_l_l = Сopy_branch(node->left, l_l, pool_allocator);
+    Node* l_l_r = Сopy_branch(node->right, l_l, pool_allocator);
+    Node* l_r_l = Сopy_branch(node->left, l_r, pool_allocator);
+    Node* l_r_r = Сopy_branch(node->right, l_r, pool_allocator);
+    Node* r_l = Сopy_branch(node->right, r, pool_allocator);
 
-    r_right->parent = node;
-    r_right->elem.type = Types_OPERATION;
-    r_right->elem.argument.operation = Operation_POWER;
-    r_right->left = r_right_left;
-    r_right->right = r_right_right;
+    l_l_l = Dif(l_l_l, pool_allocator);
+    l_r_r = Dif(l_r_r, pool_allocator);
 
-    r_right_right->parent = r_right;
-    r_right_right->elem.type = Types_NUMBER;
-    r_right_right->elem.argument.number = 2;
-
-
-    Node* left = (Node*)Pool_alloc(pool_allocator);
-    Node* left_left = (Node*)Pool_alloc(pool_allocator);
-    Node* left_right = (Node*)Pool_alloc(pool_allocator);
-
-    Node* left_left_right = Сopy_branch(node->right, NULL , left_left, pool_allocator);
-    Node* left_right_left = Сopy_branch(node->left, NULL , left_right, pool_allocator);
-
-    Node* left_left_left = Сopy_branch(node->left, NULL , left_left, pool_allocator);
-    left_left_left = Dif(left_left_left, pool_allocator);
-
-    Node* left_right_right = Сopy_branch(node->right, NULL , left_right, pool_allocator);
-    left_right_right = Dif(left_right_right, pool_allocator);
-
-    left_left->parent = left;
-    left_left->elem.type = Types_OPERATION;
-    left_left->elem.argument.operation = Operation_MUL;
-    left_left->left = left_left_left;
-    left_left->right = left_left_right;
-
-    left_right->parent = left;
-    left_right->elem.type = Types_OPERATION;
-    left_right->elem.argument.operation = Operation_MUL;
-    left_right->left = left_right_left;
-    left_right->right = left_right_right;
-
-    left->parent = node;
-    left->elem.type = Types_OPERATION;
-    left->elem.argument.operation = Operation_SUB;
-    left->left = left_left;
-    left->right = left_right;
+    Link_node_dif(l_l, l, l_l_l, l_l_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_MUL}});
+    Link_node_dif(l_r, l, l_r_l, l_r_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_MUL}});
+    Link_node_dif(l, node, l_l, l_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_SUB}});
+    Link_node_dif(r, node, r_l, r_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_POWER}});
+    Link_node_dif(r_r, r, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = 2}});
 
     Node* left_dtor = node->left;
     Node* right_dtor = node->right;
 
-    node->left = left;
-    node->right = r_right;
+    Link_node_dif(node, node->parent, l, r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_DIV}});
 
     Tree_dtor(left_dtor, pool_allocator);
     Tree_dtor(right_dtor, pool_allocator);
@@ -1232,37 +944,31 @@ static Node* Dif_dif(Node* node, Pool_allocator* pool_allocator)
 static Node* Cos_dif(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
+    assert(pool_allocator != NULL);
 
-    Node* left = (Node*)Pool_alloc(pool_allocator);
-    Node* left_right = (Node*)Pool_alloc(pool_allocator);
+    Node* l = (Node*)Pool_alloc(pool_allocator);
+    Node* l_r = (Node*)Pool_alloc(pool_allocator);
+    Node* l_l = (Node*)Pool_alloc(pool_allocator);
 
-    Node* left_left = NULL;
-    if (node->left != NULL) { left_left = Сopy_branch(node->left, NULL, left, pool_allocator); }
-    if (node->right != NULL) { left_left = Сopy_branch(node->right, NULL, left, pool_allocator); }
+    Node* l_l_l = NULL;
+    if (node->left != NULL) { l_l_l = Сopy_branch(node->left,  l_l, pool_allocator); }
+    if (node->right != NULL) { l_l_l = Сopy_branch(node->right,  l_l, pool_allocator); }
+    
+    Node* r = NULL;
+    if (node->left != NULL) { r = Сopy_branch(node->left, node, pool_allocator); r = Dif(r, pool_allocator); }
+    if (node->right != NULL) { r = Сopy_branch(node->right, node, pool_allocator); r = Dif(r, pool_allocator); }
 
-    left_right->parent = left;
-    left_right->elem.type = Types_NUMBER;
-    left_right->elem.argument.number = 0;
+    Link_node_dif(l, node, l_l, l_r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_MUL}});
+    Link_node_dif(l_r, l, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = -1}});
+    Link_node_dif(l_l, l, l_l_l, NULL, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_SIN}});
 
-    left->parent = node;
-    left->elem.type = Types_OPERATION;
-    left->elem.argument.operation = Operation_SIN;
-    left->left = left_left;
-    left->right = left_right;
+    Node* node_dtor = NULL;
+    if (node->left  != NULL) { node_dtor = node->left;  }
+    if (node->right != NULL) { node_dtor = node->right; }
 
-    Node* right = NULL;
-    if (node->left != NULL) { right = Сopy_branch(node->left, NULL, node, pool_allocator); right = Dif(right, pool_allocator); }
-    if (node->right != NULL) { right = Сopy_branch(node->right, NULL, node, pool_allocator); right = Dif(right, pool_allocator); }
+    Link_node_dif(node, node->parent, l, r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_MUL}});
 
-    Node* left_dtor = node->left;
-    Node* right_dtor = node->right;
-
-    node->elem.argument.operation = Operation_MUL;
-    node->left = left;
-    node->right = right;
-
-    Tree_dtor(left_dtor, pool_allocator);
-    Tree_dtor(right_dtor, pool_allocator);
+    Tree_dtor(node_dtor, pool_allocator);
 
     return node;
 }
@@ -1270,52 +976,27 @@ static Node* Cos_dif(Node* node, Pool_allocator* pool_allocator)
 static Node* Sin_dif(Node* node, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
+    assert(pool_allocator != NULL);
 
-    //(Element){.type = Types_VARIABLE, .argument.variable = 'x'}
+    Node* l = (Node*)Pool_alloc(pool_allocator);
 
-    Node* right = (Node*)Pool_alloc(pool_allocator);
-    Node* left = (Node*)Pool_alloc(pool_allocator);
-    Node* right_right = (Node*)Pool_alloc(pool_allocator);
-    Node* left_right = (Node*)Pool_alloc(pool_allocator);
-
-    Node* left_left = NULL;
-    if (node->left != NULL) { left_left = Сopy_branch(node->left, NULL, left, pool_allocator); }
-    if (node->right != NULL) { left_left = Сopy_branch(node->right, NULL, left, pool_allocator); }
+    Node* l_l = NULL;
+    if (node->left != NULL) { l_l = Сopy_branch(node->left,  l, pool_allocator); }
+    if (node->right != NULL) { l_l = Сopy_branch(node->right,  l, pool_allocator); }
     
-    left_right->parent = left;
-    left_right->elem.type = Types_NUMBER;
-    left_right->elem.argument.number = 0;
+    Node* r = NULL;
+    if (node->left != NULL) { r = Сopy_branch(node->left, node, pool_allocator); r = Dif(r, pool_allocator); }
+    if (node->right != NULL) { r = Сopy_branch(node->right, node, pool_allocator); r = Dif(r, pool_allocator); }
 
-    left->parent = node;
-    left->elem.type = Types_OPERATION;
-    left->elem.argument.operation = Operation_COS;
-    left->left = left_left;
-    left->right = left_right;
+    Link_node_dif(l, node, l_l, NULL, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_COS}});
 
-    Node* right_left = NULL;
-    if (node->left != NULL) { right_left = Сopy_branch(node->left, NULL, right, pool_allocator); right_left = Dif(right_left, pool_allocator); }
-    if (node->right != NULL) { right_left = Сopy_branch(node->right, NULL, right, pool_allocator); right_left = Dif(right_left, pool_allocator); }
+    Node* node_dtor = NULL;
+    if (node->left  != NULL) { node_dtor = node->left;  }
+    if (node->right != NULL) { node_dtor = node->right; }
 
-    right_right->parent = right;
-    right_right->elem.type = Types_NUMBER;
-    right_right->elem.argument.number = -1;
+    Link_node_dif(node, node->parent, l, r, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_MUL}});
 
-    right->parent = node;
-    right->elem.type = Types_OPERATION;
-    right->elem.argument.operation = Operation_MUL;
-    right->left = right_left;
-    right->right = right_right;
-
-
-    Node* left_dtor = node->left;
-    Node* right_dtor = node->right;
-
-    node->elem.argument.operation = Operation_MUL;
-    node->left = left;
-    node->right = right;
-
-    Tree_dtor(left_dtor, pool_allocator);
-    Tree_dtor(right_dtor, pool_allocator);
+    Tree_dtor(node_dtor, pool_allocator);
 
     return node;
 }

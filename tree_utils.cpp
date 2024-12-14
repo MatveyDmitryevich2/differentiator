@@ -8,34 +8,29 @@
 #include <stdbool.h>
 #include <math.h>
 
-#include "tree.h"
+#include "com.h"
 
 bool Is_empty(Node* node)
 {
-    if (node == NULL) { return true;  }
-    else              { return false; }
+    return (node == NULL);
 }
 
 bool Is_operation(Node* node)
 {
-    if ((node != NULL) && (node->elem.type == Types_OPERATION)) { return true;  }
-    else                                                        { return false; }
+    return ((node != NULL) && (node->elem.type == Types_OPERATION));
 }
 
 bool Is_number(Node* node)
 {
-    if ((node != NULL) && (node->elem.type == Types_NUMBER)) { return true;  }
-    else                                                     { return false; }
+    return ((node != NULL) && (node->elem.type == Types_NUMBER));
 }
 
 bool Is_veriable(Node* node)
 {
-    if ((node != NULL) && (node->elem.type == Types_VARIABLE)) { return true;  }
-    else                                                       { return false; }
+    return ((node != NULL) && (node->elem.type == Types_VARIABLE));
 }
 
 bool Is_op_mul(Node* node)
 {
-    if ((node != NULL) && (node->elem.argument.operation == Operation_MUL)) { return true;  }
-    else                                                { return false; }
+   return ((node != NULL) && (node->elem.argument.operation == Operation_MUL));
 }

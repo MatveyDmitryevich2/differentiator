@@ -9,7 +9,10 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include "utils.h"
 #include "tree_utils.h"
+#include "com.h"
+#include "dif_function.h"
 
 static Error Write_before_body();
 static Error Write_body();
@@ -259,7 +262,7 @@ Error Dump_LaTex(Node* node, const char* filename, Pool_allocator* pool_allocato
     Recursive_entry_formula(node, file_tex);
     fprintf(file_tex, "\\]\\newline\n\\newline\n\n\n");
 
-    node = Dif(node, pool_allocator);
+    node = Dif(node, pool_allocator); // FIXME нахуй отсюад
     fprintf(file_tex, "Первая производная:\\newline\n");
     fprintf(file_tex, "\\[");
     Dump_grapviz(node);
@@ -267,9 +270,8 @@ Error Dump_LaTex(Node* node, const char* filename, Pool_allocator* pool_allocato
     Recursive_entry_formula(node, file_tex);
     fprintf(file_tex, "\\]\\newline\n\\newline\n\n\n");
 
-    Calculation(node);
-    Simplification(node, pool_allocator);
-    Calculation(node);
+    Calculation(node); // FIXME нахуй отсюад
+    Simplification(node, pool_allocator); // FIXME нахуй отсюад
     fprintf(file_tex, "Формула первой производной после упрощения и свертывания констант:\\newline\n");
     fprintf(file_tex, "\\[");
     Dump_grapviz(node);
@@ -277,7 +279,7 @@ Error Dump_LaTex(Node* node, const char* filename, Pool_allocator* pool_allocato
     Recursive_entry_formula(node, file_tex);
     fprintf(file_tex, "\\]\\newline\n\\newline\n\n\n");
 
-    node = Dif(node, pool_allocator);
+    node = Dif(node, pool_allocator); // FIXME нахуй отсюад
     fprintf(file_tex, "Вторая производная:\\newline\n");
     fprintf(file_tex, "\\[");
     Dump_grapviz(node);
@@ -285,8 +287,8 @@ Error Dump_LaTex(Node* node, const char* filename, Pool_allocator* pool_allocato
     Recursive_entry_formula(node, file_tex);
     fprintf(file_tex, "\\]\\newline\n\\newline\n\n\n");
 
-    Calculation(node);
-    Simplification(node, pool_allocator);
+    Calculation(node); // FIXME нахуй отсюад
+    Simplification(node, pool_allocator); // FIXME нахуй отсюад
     fprintf(file_tex, "Формула второй производной после упрощения и свертывания констант:\\newline\n");
     fprintf(file_tex, "\\[");
     fprintf(file_tex, "f''(x) = ");

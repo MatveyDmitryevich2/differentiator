@@ -4,8 +4,11 @@
 #include <stdio.h>
 #include <stddef.h>
 
-size_t Get_file_size(FILE* file);
+#include "com.h"
+
 bool Is_equal(double a, double b);
+size_t Get_file_size(FILE *file);
+bool Is_operator(char simbol);
 
 //#define USE_DEBUG_PRINTF
 

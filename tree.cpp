@@ -9,8 +9,7 @@
 #include <math.h>
 
 #include "Pool_allocator/pool_allocator.h"
-
-#include "dif_function.h"
+#include "com.h"
 #include "utils.h"
 #include "dump.h"
 
@@ -22,6 +21,32 @@ static void Get_node_arg_from_str(const char* argument, Node* node);
 static void Recursive_tree_save(Node* node, FILE* file_ctor);
 
 //-------------------------------------------------global---------------------------------------------------------------
+void Dump_node(Node* node)
+{
+    fprintf(stderr, "------------------------\n");
+    fprintf(stderr, "node: %p\n", node);
+    if (node != NULL) {
+        fprintf(stderr, "node->left: %p\n", node->left);
+        fprintf(stderr, "node->right: %p\n", node->right);
+        fprintf(stderr, "node->parent: %p\n", node->parent);
+        fprintf(stderr, "type: %d\n", node->elem.type);
+    }
+    fprintf(stderr, "------------------------\n");
+}
+
+void Read_file_buffer(const char* name_file, Info_buffer* info_buffer)
+{
+    assert(name_file != NULL);
+
+    FILE* file_for_save = fopen(name_file, "r");
+
+    info_buffer->size = Get_file_size(file_for_save);
+    info_buffer->buffer = (char*)calloc(info_buffer->size + 1, sizeof(char));
+
+    fread(info_buffer->buffer, sizeof(char), info_buffer->size, file_for_save);
+
+    fclose(file_for_save);
+}
 
 void Tree_dtor(Node* node, Pool_allocator* pool_allocator)
 {
@@ -55,34 +80,6 @@ void Error_handling(Error err)
         default:
         break;
     }
-}
-
-Node* Decod_tree(const char* name_file, Pool_allocator* pool_allocator, Error* err)
-{
-    assert(name_file != NULL);
-    assert(pool_allocator != NULL);
-    assert(err != NULL);
-
-    FILE* file_for_storing_tree = fopen(name_file, "r");
-    if (file_for_storing_tree == NULL) { *err = Error_OPEN_FILE; return NULL; }
-
-    size_t size_buffer = Get_file_size(file_for_storing_tree);
-
-    char* buffer = (char*)calloc(size_buffer + 1, sizeof(char));
-    if (buffer == NULL) { *err = Error_MEMORY_ALLOCATION_ERROR; return NULL; }
-
-    char* buffer_move = buffer;
-
-    size_t result = fread(buffer, sizeof(char), size_buffer, file_for_storing_tree);
-    if (fclose(file_for_storing_tree) == EOF) { *err = Error_CLOSE_FILE; return NULL; }
-    
-    if (result != size_buffer) { *err = Error_READING_THE_FILE; return NULL; }
-
-    Node* root = Parse_tree(&buffer_move, pool_allocator);
-
-    free(buffer); 
-
-    return root;
 }
 
 Error Save_tree(Node* node, const char* name_file)
@@ -312,17 +309,23 @@ static void Parse_line(char** buffer, char* line_buffer)
     *buffer = end;
 }
 
-Node* Сopy_branch(Node* node, Node* new_node, Node* parent, Pool_allocator* pool_allocator)
+Node* Сopy_branch(Node* node, Node* parent, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
 
-    new_node = (Node*)Pool_alloc(pool_allocator);
+    Node* new_node = (Node*)Pool_alloc(pool_allocator);
     new_node->parent = parent;
     new_node->elem.type = node->elem.type;
     new_node->elem.argument = node->elem.argument;
 
-    if (node->left != NULL) { new_node->left = Сopy_branch(node->left, new_node->left, new_node, pool_allocator); }
-    if (node->right != NULL) { new_node->right = Сopy_branch(node->right, new_node->right, new_node, pool_allocator); }
+    if (node->left  != NULL) { 
+        new_node->left =  Сopy_branch(node->left,  new_node, pool_allocator); 
+        // fprintf(stderr, "new_node->left: %p\n", new_node->left);
+    }
+    if (node->right != NULL) { 
+        new_node->right = Сopy_branch(node->right, new_node, pool_allocator); 
+        // fprintf(stderr, "new_node->right: %p\n", new_node->right);
+    }
 
     return new_node;
 }

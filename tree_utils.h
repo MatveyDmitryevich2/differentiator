@@ -1,7 +1,7 @@
 #ifndef TREE_UTILS_H
 #define TREE_UTILS_H
 
-#include "tree.h"
+#include "com.h"
 
 bool Is_operation(Node* node);
 bool Is_number(Node* node);

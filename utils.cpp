@@ -6,11 +6,18 @@
 #include <assert.h>
 #include <math.h>
 
+#include "com.h"
+
 bool Is_equal(double a, double b)
 {
     if (fabs(a - b) < 0.0001) { return true; }
 
     return false;
+}
+
+bool Is_operator(char simbol)
+{
+    return (simbol == '+' || simbol == '-' || simbol == '/' || simbol == '*' || simbol == '^');
 }
 
 size_t Get_file_size(FILE *file)
