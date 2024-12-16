@@ -13,8 +13,8 @@
 #include "../tree_utils.h"
 #include "../tree.h"
 
-static double Counting_leaflet_at_point(Node* node, double x);
-static double Count_expression(Node* node, double x);
+static double Counting_leaflet_at_point(Node* node, double x, Pool_allocator* pool_allocator);
+static double Count_expression(Node* node, double x, Pool_allocator* pool_allocator);
 
 Array_coordinates_points* Calculat_value_function_at_point(Node* root, Pool_allocator* pool_allocator)
 {
@@ -30,7 +30,7 @@ Array_coordinates_points* Calculat_value_function_at_point(Node* root, Pool_allo
     for (size_t i = 0; range <= MAX_X; range++)
     {
         Node* node = Сopy_branch(root, root->parent, pool_allocator);
-        Count_expression(node, range);
+        Count_expression(node, range, pool_allocator);
 
         if (isinf(node->elem.argument.number) || isnan(node->elem.argument.number) || node->elem.type != Types_NUMBER)
         {
@@ -57,19 +57,28 @@ Array_coordinates_points* Calculat_value_function_at_point(Node* root, Pool_allo
     return array_coordinates_points;
 }
 
-static double Count_expression(Node* node, double x)
+static double Count_expression(Node* node, double x, Pool_allocator* pool_allocator)
 {
     if (!Is_operation(node)) { return 0; }
 
-    if (Is_operation(node->left))  { double a = Count_expression(node->left, x); if (Is_inf_or_nan(a)) { return a; }}
-    if (Is_operation(node->right)) { double a = Count_expression(node->right, x); if (Is_inf_or_nan(a)) { return a; }}
+    if (Is_operation(node->left))
+    {
+        double ret_l = Count_expression(node->left, x, pool_allocator);
+        if (Is_inf_or_nan(ret_l)) { return ret_l; }
+    }
+    if (Is_operation(node->right)) 
+    {
+        double ret_r = Count_expression(node->right, x, pool_allocator);
+        if (Is_inf_or_nan(ret_r)) { return ret_r; }
+    }
 
-    if (Is_inf_or_nan(Counting_leaflet_at_point(node, x))) { return Counting_leaflet_at_point(node, x); }
+    double ret_n = Counting_leaflet_at_point(node, x, pool_allocator);
+    if (Is_inf_or_nan(ret_n)) { return ret_n; }
 
     else return 0;
 }
 
-static double Counting_leaflet_at_point(Node* node, double x)
+static double Counting_leaflet_at_point(Node* node, double x, Pool_allocator* pool_allocator)
 {
     assert(node != NULL);
 
@@ -94,8 +103,8 @@ static double Counting_leaflet_at_point(Node* node, double x)
         node->elem.type = Types_NUMBER;                                                                       \
         node->elem.argument.number = value;                                                                   \
                                                                                                               \
-        free(node->left);                                                                                     \
-        free(node->right);                                                                                    \
+        Tree_dtor(node->left, pool_allocator);                                                                \
+        Tree_dtor(node->right, pool_allocator);                                                               \
         node->left = NULL;                                                                                    \
         node->right = NULL;                                                                                   \
     }                                                                                                         \
@@ -110,7 +119,7 @@ static double Counting_leaflet_at_point(Node* node, double x)
             node->left->elem.argument.number = x;                            \
                                                                              \
             double value = op_sign(node->left->elem.argument.number);        \
-            free(node->left);                                                \
+            Tree_dtor(node->left, pool_allocator);                           \
             node->left = NULL;                                               \
             if (Is_inf_or_nan(value)) { return value; }                      \
                                                                              \
@@ -124,7 +133,7 @@ static double Counting_leaflet_at_point(Node* node, double x)
             node->right->elem.argument.number = x;                           \
                                                                              \
             double value = op_sign(node->right->elem.argument.number);       \
-            free(node->right);                                               \
+            Tree_dtor(node->right, pool_allocator);                          \
             node->right = NULL;                                              \
             if (Is_inf_or_nan(value)) { return value; }                      \
                                                                              \
@@ -144,7 +153,7 @@ static double Counting_leaflet_at_point(Node* node, double x)
             node->left->elem.argument.number = x;                            \
                                                                              \
             double value = 1.0 / op_sign(node->left->elem.argument.number);  \
-            free(node->left);                                                \
+            Tree_dtor(node->left, pool_allocator);                           \
             node->left = NULL;                                               \
             if (Is_inf_or_nan(value)) { return value; }                      \
                                                                              \
@@ -158,7 +167,7 @@ static double Counting_leaflet_at_point(Node* node, double x)
             node->right->elem.argument.number = x;                           \
                                                                              \
             double value = 1.0 / op_sign(node->right->elem.argument.number); \
-            free(node->right);                                               \
+            Tree_dtor(node->right, pool_allocator);                          \
             node->right = NULL;                                              \
             if (Is_inf_or_nan(value)) { return value; }                      \
                                                                              \
@@ -178,7 +187,7 @@ static double Counting_leaflet_at_point(Node* node, double x)
             node->left->elem.argument.number = x;                              \
                                                                                \
             double value = M_PI / 2 - atan(node->left->elem.argument.number);  \
-            free(node->left);                                                  \
+            Tree_dtor(node->left, pool_allocator);                             \
             node->left = NULL;                                                 \
             if (Is_inf_or_nan(value)) { return value; }                        \
                                                                                \
@@ -192,7 +201,7 @@ static double Counting_leaflet_at_point(Node* node, double x)
             node->right->elem.argument.number = x;                             \
                                                                                \
             double value = M_PI / 2 - atan(node->right->elem.argument.number); \
-            free(node->right);                                                 \
+            Tree_dtor(node->right, pool_allocator);                            \
             node->right = NULL;                                                \
             if (Is_inf_or_nan(value)) { return value; }                        \
                                                                                \
@@ -219,8 +228,8 @@ static double Counting_leaflet_at_point(Node* node, double x)
                                                                                                    \
                                                                                                    \
         double value = pow(node->left->elem.argument.number, node->right->elem.argument.number);   \
-        free(node->left);                                                                          \
-        free(node->right);                                                                         \
+        Tree_dtor(node->left, pool_allocator);                                                     \
+        Tree_dtor(node->right, pool_allocator);                                                    \
         node->left = NULL;                                                                         \
         node->right = NULL;                                                                        \
         if (Is_inf_or_nan(value)) { return value; }                                                \
@@ -245,8 +254,8 @@ static double Counting_leaflet_at_point(Node* node, double x)
         }                                                                                              \
                                                                                                        \
         double value = log(node->right->elem.argument.number) / log(node->left->elem.argument.number); \
-        free(node->left);                                                                              \
-        free(node->right);                                                                             \
+        Tree_dtor(node->left, pool_allocator);                                                                              \
+        Tree_dtor(node->right, pool_allocator);                                                                             \
         node->left = NULL;                                                                             \
         node->right = NULL;                                                                            \
         if (Is_inf_or_nan(value)) { return value; }                                                    \
@@ -265,7 +274,7 @@ static double Counting_leaflet_at_point(Node* node, double x)
             node->left->elem.argument.number = x;                            \
                                                                              \
             double value = log(node->left->elem.argument.number);            \
-            free(node->left);                                                \
+            Tree_dtor(node->left, pool_allocator);                           \
             node->left = NULL;                                               \
             if (Is_inf_or_nan(value)) { return value; }                      \
                                                                              \
@@ -279,7 +288,7 @@ static double Counting_leaflet_at_point(Node* node, double x)
             node->right->elem.argument.number = x;                           \
                                                                              \
             double value = log(node->right->elem.argument.number);           \
-            free(node->right);                                               \
+            Tree_dtor(node->right, pool_allocator);                          \
             node->right = NULL;                                              \
             if (Is_inf_or_nan(value)) { return value; }                      \
                                                                              \

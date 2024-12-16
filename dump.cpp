@@ -258,7 +258,7 @@ Error Dump_LaTex(Node* node, const char* filename, Pool_allocator* pool_allocato
 
     fprintf(file_tex, "Поступившая формула до дифференцирвоания(рис. 1):\\newline\n");
     fprintf(file_tex, "\\[");
-    Dump_grapviz(node);
+    //Dump_grapviz(node);
     fprintf(file_tex, "f(x) = ");
     Recursive_entry_formula(node, file_tex);
     fprintf(file_tex, "\\]\\newline\n\\newline\n\n\n");
@@ -271,7 +271,7 @@ Error Dump_LaTex(Node* node, const char* filename, Pool_allocator* pool_allocato
     node = Dif(node, pool_allocator); // FIXME нахуй отсюад
     fprintf(file_tex, "Первая производная(рис. 2):\\newline\n");
     fprintf(file_tex, "\\[");
-    Dump_grapviz(node);
+    //Dump_grapviz(node);
     fprintf(file_tex, "f'(x) = ");
     Recursive_entry_formula(node, file_tex);
     fprintf(file_tex, "\\]\\newline\n\\newline\n\n\n");
@@ -280,16 +280,16 @@ Error Dump_LaTex(Node* node, const char* filename, Pool_allocator* pool_allocato
     Simplification(node, pool_allocator); // FIXME нахуй отсюад
     fprintf(file_tex, "Формула первой производной после упрощения и свертывания констант:\\newline\n");
     fprintf(file_tex, "\\[");
-    Dump_grapviz(node);
+    //Dump_grapviz(node);
     fprintf(file_tex, "f'(x) = ");
     Recursive_entry_formula(node, file_tex);
 
     fprintf(file_tex, "\\]\\newline\n\\newline\n\n\n");
 
-    // Array_coordinates_points* array_coordinates_points2 = Calculat_value_function_at_point(node, pool_allocator);
-    // free(array_coordinates_points2);
-    // system("python3 Graphics/scrypt.py coord.txt two.pdf");
-    // fprintf(file_tex, "\\begin{figure}[h!]\n    \\centering\n    \\includegraphics[width=0.8\\textwidth]{two.pdf}\n    \\caption{f'(x)}\n \\end{figure}\n\n\n");
+    Array_coordinates_points* array_coordinates_points2 = Calculat_value_function_at_point(node, pool_allocator);
+    free(array_coordinates_points2);
+    system("python3 Graphics/scrypt.py coord.txt two.pdf");
+    fprintf(file_tex, "\\begin{figure}[h!]\n    \\centering\n    \\includegraphics[width=0.8\\textwidth]{two.pdf}\n    \\caption{f'(x)}\n \\end{figure}\n\n\n");
 
     fprintf(file_tex, INFO_END_TEX);
     fclose(file_tex);
