@@ -275,6 +275,21 @@ Error Dump_LaTex(Node* node, const char* filename, Pool_allocator* pool_allocato
 
 
 
+    Node* taylor = Assembling_formula(node, 3, 0, pool_allocator);
+    fprintf(file_tex, "Разложение по тейлору(рис. 3):\\newline\n");
+    fprintf(file_tex, "\\[");
+    Dump_grapviz(taylor);
+    fprintf(file_tex, "Приближение f(x) = ");
+    Recursive_entry_formula(taylor, file_tex);
+    fprintf(file_tex, "\\]\\newline\n\\newline\n\n");
+
+    Array_coordinates_points* array_coordinates_points3 = Calculat_value_function_at_point(taylor, pool_allocator);
+    Tree_dtor(taylor, pool_allocator);
+    free(array_coordinates_points3);
+    system("python3 Graphics_and_Taylor/scrypt.py coord.txt three.pdf");
+    fprintf(file_tex, "\\begin{figure}[h!]\n    \\centering\n    \\includegraphics[width=0.8\\textwidth]{three.pdf}\n    \\caption{f(x)}\n \\end{figure}\n\n\n");
+
+
     Node* node_dif = Dif(node, pool_allocator); 
     fprintf(file_tex, "Первая производная(рис. 2):\\newline\n");
     fprintf(file_tex, "\\[");
@@ -299,19 +314,6 @@ Error Dump_LaTex(Node* node, const char* filename, Pool_allocator* pool_allocato
 
 
 
-    Node* taylor = Assembling_formula(node, 3, 4, pool_allocator);
-    fprintf(file_tex, "Разложение по тейлору(рис. 3):\\newline\n");
-    fprintf(file_tex, "\\[");
-    Dump_grapviz(taylor);
-    fprintf(file_tex, "f(x) ~ ");
-    Recursive_entry_formula(taylor, file_tex);
-    fprintf(file_tex, "\\]\\newline\n\\newline\n\n");
-
-    Array_coordinates_points* array_coordinates_points3 = Calculat_value_function_at_point(taylor, pool_allocator);
-    Tree_dtor(taylor, pool_allocator);
-    free(array_coordinates_points3);
-    system("python3 Graphics_and_Taylor/scrypt.py coord.txt three.pdf");
-    fprintf(file_tex, "\\begin{figure}[h!]\n    \\centering\n    \\includegraphics[width=0.8\\textwidth]{three.pdf}\n    \\caption{f(x)}\n \\end{figure}\n\n\n");
 
 
 
@@ -340,7 +342,7 @@ static void Recursive_entry_formula(Node* node, FILE* file_tex)
 
         case Types_NUMBER:
         {
-            fprintf(file_tex, "%.lf", node->elem.argument.number);
+            fprintf(file_tex, "%.3g", node->elem.argument.number);
             return;
         }
         break;

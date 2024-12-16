@@ -15,9 +15,9 @@ struct Array_coordinates_points
     double y;
 };
 
-static const size_t SIZE_ARRAY_COORDINATES_POINTS = 160;
-static const double MIN_X = -8;
-static const double MAX_X = 8;
+static const size_t SIZE_ARRAY_COORDINATES_POINTS = 300;
+static const double MIN_X = -3;
+static const double MAX_X = 3;
 
 Array_coordinates_points* Calculat_value_function_at_point(Node* root, Pool_allocator* pool_allocator);
 double Count_expression(Node* node, double x, Pool_allocator* pool_allocator);

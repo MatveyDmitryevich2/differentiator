@@ -26,7 +26,7 @@ Array_coordinates_points* Calculat_value_function_at_point(Node* root, Pool_allo
 
     double range = MIN_X;
 
-    for (size_t i = 0; range <= MAX_X; range = range + 0.1)
+    for (size_t i = 0; range <= MAX_X; range = range + 0.05)
     {
         Node* node = Сopy_branch(root, root->parent, pool_allocator);
         Count_expression(node, range, pool_allocator);

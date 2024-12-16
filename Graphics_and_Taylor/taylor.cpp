@@ -62,16 +62,27 @@ Node* Calculating_the_n_term(Node* node, int64_t number_member_in_decomposition,
     Tree_dtor(node, pool_allocator);
 
     Node* root = (Node*)Pool_alloc(pool_allocator);
-    Node* left = (Node*)Pool_alloc(pool_allocator);
-    Node* right = (Node*)Pool_alloc(pool_allocator);
-    Node* right_right = (Node*)Pool_alloc(pool_allocator); 
-    Node* right_left = (Node*)Pool_alloc(pool_allocator);
+    if (number_member_in_decomposition == 0)
+    {
+        Link_node_dif(root, NULL, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = ratio}});
+    }
+    else
+    {
+        Node* left = (Node*)Pool_alloc(pool_allocator);
+        Node* right = (Node*)Pool_alloc(pool_allocator);
+        Node* right_right = (Node*)Pool_alloc(pool_allocator);
+        Node* right_left = (Node*)Pool_alloc(pool_allocator);
+        Node* right_left_right = (Node*)Pool_alloc(pool_allocator); 
+        Node* right_left_left = (Node*)Pool_alloc(pool_allocator);
 
-    Link_node_dif(root, NULL, left, right, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_MUL}});
-    Link_node_dif(right, root, right_left, right_right, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_SUB}});
-    Link_node_dif(right_right, right, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = (double)function_point}});
-    Link_node_dif(right_left, right, NULL, NULL, (Element){.type = Types_VARIABLE, .argument = {.variable = 'x'}});
-    Link_node_dif(left, root, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = ratio}});
+        Link_node_dif(right, root, right_left, right_right, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_POWER}});
+        Link_node_dif(root, NULL, left, right, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_MUL}});
+        Link_node_dif(right_right, right, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = (double)number_member_in_decomposition}});
+        Link_node_dif(right_left, right, right_left_left, right_left_right, (Element){.type = Types_OPERATION, .argument = {.operation = Operation_SUB}});
+        Link_node_dif(right_left_right, right_left, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = (double)function_point}});
+        Link_node_dif(right_left_left, right_left, NULL, NULL, (Element){.type = Types_VARIABLE, .argument = {.variable = 'x'}});
+        Link_node_dif(left, root, NULL, NULL, (Element){.type = Types_NUMBER, .argument = {.number = ratio}});
+    }
 
     return root;
 }
