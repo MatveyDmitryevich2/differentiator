@@ -8,6 +8,17 @@
 
 #include "com.h"
 
+bool Is_parity(double a)
+{
+    int64_t b = (int64_t)a;
+
+    return (b % 2 != 0);
+}
+
+bool Is_inf_or_nan(double a)
+{
+    return (isinf(a) || isnan(a));
+}
 bool Is_equal(double a, double b)
 {
     if (fabs(a - b) < 0.0001) { return true; }

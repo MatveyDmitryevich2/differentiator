@@ -13,6 +13,7 @@
 #include "tree_utils.h"
 #include "com.h"
 #include "dif_function.h"
+#include "Graphics/graf.h"
 
 static Error Write_before_body();
 static Error Write_body();
@@ -255,15 +256,20 @@ Error Dump_LaTex(Node* node, const char* filename, Pool_allocator* pool_allocato
     fprintf(file_tex, "\\section*{Возможный ход вычисления производных:}\n");
     fprintf(file_tex, "\\end{center}\n\n");
 
-    fprintf(file_tex, "Поступившая формула до дифференцирвоания:\\newline\n");
+    fprintf(file_tex, "Поступившая формула до дифференцирвоания(рис. 1):\\newline\n");
     fprintf(file_tex, "\\[");
     Dump_grapviz(node);
     fprintf(file_tex, "f(x) = ");
     Recursive_entry_formula(node, file_tex);
     fprintf(file_tex, "\\]\\newline\n\\newline\n\n\n");
 
+    Array_coordinates_points* array_coordinates_points1 = Calculat_value_function_at_point(node, pool_allocator);
+    free(array_coordinates_points1);
+    system("python3 Graphics/scrypt.py coord.txt one.pdf");
+    fprintf(file_tex, "\\begin{figure}[h!]\n    \\centering\n    \\includegraphics[width=0.8\\textwidth]{one.pdf}\n    \\caption{f(x)}\n \\end{figure}\n\n\n");
+
     node = Dif(node, pool_allocator); // FIXME нахуй отсюад
-    fprintf(file_tex, "Первая производная:\\newline\n");
+    fprintf(file_tex, "Первая производная(рис. 2):\\newline\n");
     fprintf(file_tex, "\\[");
     Dump_grapviz(node);
     fprintf(file_tex, "f'(x) = ");
@@ -277,26 +283,19 @@ Error Dump_LaTex(Node* node, const char* filename, Pool_allocator* pool_allocato
     Dump_grapviz(node);
     fprintf(file_tex, "f'(x) = ");
     Recursive_entry_formula(node, file_tex);
+
     fprintf(file_tex, "\\]\\newline\n\\newline\n\n\n");
 
-    node = Dif(node, pool_allocator); // FIXME нахуй отсюад
-    fprintf(file_tex, "Вторая производная:\\newline\n");
-    fprintf(file_tex, "\\[");
-    Dump_grapviz(node);
-    fprintf(file_tex, "f''(x) = ");
-    Recursive_entry_formula(node, file_tex);
-    fprintf(file_tex, "\\]\\newline\n\\newline\n\n\n");
-
-    Calculation(node); // FIXME нахуй отсюад
-    Simplification(node, pool_allocator); // FIXME нахуй отсюад
-    fprintf(file_tex, "Формула второй производной после упрощения и свертывания констант:\\newline\n");
-    fprintf(file_tex, "\\[");
-    fprintf(file_tex, "f''(x) = ");
-    Recursive_entry_formula(node, file_tex);
-    fprintf(file_tex, "\\]\\newline\n\\newline\n\n\n");
+    // Array_coordinates_points* array_coordinates_points2 = Calculat_value_function_at_point(node, pool_allocator);
+    // free(array_coordinates_points2);
+    // system("python3 Graphics/scrypt.py coord.txt two.pdf");
+    // fprintf(file_tex, "\\begin{figure}[h!]\n    \\centering\n    \\includegraphics[width=0.8\\textwidth]{two.pdf}\n    \\caption{f'(x)}\n \\end{figure}\n\n\n");
 
     fprintf(file_tex, INFO_END_TEX);
     fclose(file_tex);
+
+    system("pdflatex dump_LaTex.tex");
+
     return Error_NO_ERROR;
 }
 
@@ -454,3 +453,19 @@ static void Operation_output(Node* node, FILE* file_tex)
     #undef CASE_ADD_SUB
     #undef CASE_MUL
 }
+
+// node = Dif(node, pool_allocator); // FIXME нахуй отсюад
+// fprintf(file_tex, "Вторая производная:\\newline\n");
+// fprintf(file_tex, "\\[");
+// Dump_grapviz(node);
+// fprintf(file_tex, "f''(x) = ");
+// Recursive_entry_formula(node, file_tex);
+// fprintf(file_tex, "\\]\\newline\n\\newline\n\n\n");
+
+// Calculation(node); // FIXME нахуй отсюад
+// Simplification(node, pool_allocator); // FIXME нахуй отсюад
+// fprintf(file_tex, "Формула второй производной после упрощения и свертывания констант:\\newline\n");
+// fprintf(file_tex, "\\[");
+// fprintf(file_tex, "f''(x) = ");
+// Recursive_entry_formula(node, file_tex);
+// fprintf(file_tex, "\\]\\newline\n\\newline\n\n\n");

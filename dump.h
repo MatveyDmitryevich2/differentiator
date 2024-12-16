@@ -30,6 +30,7 @@ const char INFO_BEGIN_TEX[] = "\\documentclass[a4paper,12pt]{article}\n\\usepack
                             "\\usepackage{amsmath,amsfonts,amssymb,amsthm,mathtools}\n"
                             "\\usepackage[left=10mm, top=10mm, right=10mm, bottom=20mm, nohead, nofoot]{geometry}"
                             "\n\\geometry{landscape}\n"
+                            "\n\\usepackage{graphicx}\n"
                             "\n\\begin{document}\n\n\n";
 
 const char INFO_END_TEX[] = "\n\n\n\\end{document}";

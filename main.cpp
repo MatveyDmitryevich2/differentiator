@@ -9,6 +9,7 @@
 #include "dump.h"
 #include "dif_function.h"
 #include "Recursive_descent/RBNF.h"
+#include "Graphics/graf.h"
 
 int main()
 {

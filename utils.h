@@ -9,6 +9,8 @@
 bool Is_equal(double a, double b);
 size_t Get_file_size(FILE *file);
 bool Is_operator(char simbol);
+bool Is_parity(double a);
+bool Is_inf_or_nan(double a);
 
 //#define USE_DEBUG_PRINTF
 
