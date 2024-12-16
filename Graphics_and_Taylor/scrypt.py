@@ -10,7 +10,7 @@ def plot_graph(data_file, output_pdf):
             x.append(float(values[0]))
             y.append(float(values[1]))
 
-    plt.plot(x, y, marker='o', linestyle='-', color='g', label='Данные')
+    plt.plot(x, y, marker='', linestyle='-', color='r', label='Данные')
     plt.xlabel('X')
     plt.ylabel('Y')
     plt.legend()

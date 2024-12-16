@@ -9,7 +9,8 @@
 #include "dump.h"
 #include "dif_function.h"
 #include "Recursive_descent/RBNF.h"
-#include "Graphics/graf.h"
+#include "Graphics_and_Taylor/graf.h"
+#include "Graphics_and_Taylor/taylor.h"
 
 int main()
 {
@@ -26,7 +27,17 @@ int main()
 
     Node* node = GetG(array_identifiers);
 
-    Dump_LaTex(node, NAME_FILE_LATEX, pool_allocator);
+    Dump_grapviz(node);
+    Node* root = Assembling_formula(node, 3, 4, pool_allocator);
+    Dump_grapviz(root);
+
+    Array_coordinates_points* array_coordinates_points3 = Calculat_value_function_at_point(root, pool_allocator);
+    Tree_dtor(root, pool_allocator);
+    free(array_coordinates_points3);
+    Tree_dtor(root, pool_allocator);
+
+
+    //Dump_LaTex(node, NAME_FILE_LATEX, pool_allocator);
 
     if (err != Error_NO_ERROR) { Error_handling(err); return EXIT_FAILURE;}
     err = Write_html_mode(Dump_html_END);

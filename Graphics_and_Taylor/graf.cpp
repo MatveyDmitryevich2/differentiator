@@ -14,7 +14,6 @@
 #include "../tree.h"
 
 static double Counting_leaflet_at_point(Node* node, double x, Pool_allocator* pool_allocator);
-static double Count_expression(Node* node, double x, Pool_allocator* pool_allocator);
 
 Array_coordinates_points* Calculat_value_function_at_point(Node* root, Pool_allocator* pool_allocator)
 {
@@ -27,7 +26,7 @@ Array_coordinates_points* Calculat_value_function_at_point(Node* root, Pool_allo
 
     double range = MIN_X;
 
-    for (size_t i = 0; range <= MAX_X; range++)
+    for (size_t i = 0; range <= MAX_X; range = range + 0.1)
     {
         Node* node = Сopy_branch(root, root->parent, pool_allocator);
         Count_expression(node, range, pool_allocator);
@@ -57,7 +56,7 @@ Array_coordinates_points* Calculat_value_function_at_point(Node* root, Pool_allo
     return array_coordinates_points;
 }
 
-static double Count_expression(Node* node, double x, Pool_allocator* pool_allocator)
+double Count_expression(Node* node, double x, Pool_allocator* pool_allocator)
 {
     if (!Is_operation(node)) { return 0; }
 

@@ -17,7 +17,6 @@
 
 static void Fold_constants(Node* node);
 static void Reduce_redundant_ops(Node* node, Pool_allocator* pool_allocator);
-static void Link_node_dif(Node* node, Node* parent, Node* left, Node* right, Element elem);
 
 static Node* Add_dif   (Node* node, Pool_allocator* Pool_allocator);
 static Node* Sub_dif   (Node* node, Pool_allocator* Pool_allocator);
@@ -350,7 +349,7 @@ static Node* Dif_operation(Node* node, Pool_allocator* pool_allocator)
 }
 //(Element){.type = Types_VARIABLE, .argument.variable = 'x'}
 
-static void Link_node_dif(Node* node, Node* parent, Node* left, Node* right, Element elem)
+void Link_node_dif(Node* node, Node* parent, Node* left, Node* right, Element elem)
 {
     node->parent = parent;
     node->left = left;

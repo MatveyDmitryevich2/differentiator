@@ -15,10 +15,11 @@ struct Array_coordinates_points
     double y;
 };
 
-static const size_t SIZE_ARRAY_COORDINATES_POINTS = 61;
-static const double MIN_X = -30;
-static const double MAX_X = 30;
+static const size_t SIZE_ARRAY_COORDINATES_POINTS = 160;
+static const double MIN_X = -8;
+static const double MAX_X = 8;
 
 Array_coordinates_points* Calculat_value_function_at_point(Node* root, Pool_allocator* pool_allocator);
+double Count_expression(Node* node, double x, Pool_allocator* pool_allocator);
 
 #endif //GRAF_H

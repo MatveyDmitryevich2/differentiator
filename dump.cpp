@@ -13,7 +13,8 @@
 #include "tree_utils.h"
 #include "com.h"
 #include "dif_function.h"
-#include "Graphics/graf.h"
+#include "Graphics_and_Taylor/graf.h"
+#include "Graphics_and_Taylor/taylor.h"
 
 static Error Write_before_body();
 static Error Write_body();
@@ -131,7 +132,7 @@ static void Generate_nodes(Node* node, FILE* file)
 
     if (node->elem.type == Types_NUMBER) {
         fprintf(file, "        <tr><td align=\"center\" colspan=\"2\">%s</td></tr>\n", Types_NUMBER_);
-        fprintf(file, "        <tr><td align=\"center\" colspan=\"2\">%.lf</td></tr>\n", node->elem.argument.number);
+        fprintf(file, "        <tr><td align=\"center\" colspan=\"2\">%.3lf</td></tr>\n", node->elem.argument.number);
     } else 
     
     if (node->elem.type == Types_VARIABLE) {
@@ -252,44 +253,67 @@ Error Dump_LaTex(Node* node, const char* filename, Pool_allocator* pool_allocato
     fprintf(file_tex, "\n");
     fprintf(file_tex, INFO_BEGIN_TEX);
 
+
+
     fprintf(file_tex, "\\begin{center}\n");
     fprintf(file_tex, "\\section*{Возможный ход вычисления производных:}\n");
     fprintf(file_tex, "\\end{center}\n\n");
+
+
 
     fprintf(file_tex, "Поступившая формула до дифференцирвоания(рис. 1):\\newline\n");
     fprintf(file_tex, "\\[");
     //Dump_grapviz(node);
     fprintf(file_tex, "f(x) = ");
     Recursive_entry_formula(node, file_tex);
-    fprintf(file_tex, "\\]\\newline\n\\newline\n\n\n");
+    fprintf(file_tex, "\\]\\newline\n\\newline\n\n");
 
     Array_coordinates_points* array_coordinates_points1 = Calculat_value_function_at_point(node, pool_allocator);
     free(array_coordinates_points1);
-    system("python3 Graphics/scrypt.py coord.txt one.pdf");
+    system("python3 Graphics_and_Taylor/scrypt.py coord.txt one.pdf");
     fprintf(file_tex, "\\begin{figure}[h!]\n    \\centering\n    \\includegraphics[width=0.8\\textwidth]{one.pdf}\n    \\caption{f(x)}\n \\end{figure}\n\n\n");
 
-    node = Dif(node, pool_allocator); // FIXME нахуй отсюад
+
+
+    Node* node_dif = Dif(node, pool_allocator); 
     fprintf(file_tex, "Первая производная(рис. 2):\\newline\n");
     fprintf(file_tex, "\\[");
     //Dump_grapviz(node);
     fprintf(file_tex, "f'(x) = ");
-    Recursive_entry_formula(node, file_tex);
-    fprintf(file_tex, "\\]\\newline\n\\newline\n\n\n");
+    Recursive_entry_formula(node_dif, file_tex);
+    fprintf(file_tex, "\\]\\newline\n\\newline\n\n");
 
-    Calculation(node); // FIXME нахуй отсюад
-    Simplification(node, pool_allocator); // FIXME нахуй отсюад
+    Calculation(node_dif); 
+    Simplification(node_dif, pool_allocator); 
     fprintf(file_tex, "Формула первой производной после упрощения и свертывания констант:\\newline\n");
     fprintf(file_tex, "\\[");
     //Dump_grapviz(node);
     fprintf(file_tex, "f'(x) = ");
-    Recursive_entry_formula(node, file_tex);
+    Recursive_entry_formula(node_dif, file_tex);
+    fprintf(file_tex, "\\]\\newline\n\\newline\n\n");
 
-    fprintf(file_tex, "\\]\\newline\n\\newline\n\n\n");
-
-    Array_coordinates_points* array_coordinates_points2 = Calculat_value_function_at_point(node, pool_allocator);
+    Array_coordinates_points* array_coordinates_points2 = Calculat_value_function_at_point(node_dif, pool_allocator);
     free(array_coordinates_points2);
-    system("python3 Graphics/scrypt.py coord.txt two.pdf");
+    system("python3 Graphics_and_Taylor/scrypt.py coord.txt two.pdf");
     fprintf(file_tex, "\\begin{figure}[h!]\n    \\centering\n    \\includegraphics[width=0.8\\textwidth]{two.pdf}\n    \\caption{f'(x)}\n \\end{figure}\n\n\n");
+
+
+
+    Node* taylor = Assembling_formula(node, 3, 4, pool_allocator);
+    fprintf(file_tex, "Разложение по тейлору(рис. 3):\\newline\n");
+    fprintf(file_tex, "\\[");
+    Dump_grapviz(taylor);
+    fprintf(file_tex, "f(x) ~ ");
+    Recursive_entry_formula(taylor, file_tex);
+    fprintf(file_tex, "\\]\\newline\n\\newline\n\n");
+
+    Array_coordinates_points* array_coordinates_points3 = Calculat_value_function_at_point(taylor, pool_allocator);
+    Tree_dtor(taylor, pool_allocator);
+    free(array_coordinates_points3);
+    system("python3 Graphics_and_Taylor/scrypt.py coord.txt three.pdf");
+    fprintf(file_tex, "\\begin{figure}[h!]\n    \\centering\n    \\includegraphics[width=0.8\\textwidth]{three.pdf}\n    \\caption{f(x)}\n \\end{figure}\n\n\n");
+
+
 
     fprintf(file_tex, INFO_END_TEX);
     fclose(file_tex);
@@ -454,7 +478,7 @@ static void Operation_output(Node* node, FILE* file_tex)
     #undef CASE_MUL
 }
 
-// node = Dif(node, pool_allocator); // FIXME нахуй отсюад
+// node = Dif(node, pool_allocator); 
 // fprintf(file_tex, "Вторая производная:\\newline\n");
 // fprintf(file_tex, "\\[");
 // Dump_grapviz(node);
@@ -462,8 +486,8 @@ static void Operation_output(Node* node, FILE* file_tex)
 // Recursive_entry_formula(node, file_tex);
 // fprintf(file_tex, "\\]\\newline\n\\newline\n\n\n");
 
-// Calculation(node); // FIXME нахуй отсюад
-// Simplification(node, pool_allocator); // FIXME нахуй отсюад
+// Calculation(node); 
+// Simplification(node, pool_allocator); 
 // fprintf(file_tex, "Формула второй производной после упрощения и свертывания констант:\\newline\n");
 // fprintf(file_tex, "\\[");
 // fprintf(file_tex, "f''(x) = ");
